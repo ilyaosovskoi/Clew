@@ -149,6 +149,31 @@ We are actively developing Clew. Here is what to expect next:
 - **v1.2.0:** Git integration (branch status, diff viewer, commit UI).
 - **Future:** Advanced debugging, plugin system, Windows/Linux ports.
 
+- **v1.0.1 (Next):**
+  - New unified AI workspace.
+  - Natural-language task composer.
+  - Templates & Skills system.
+  - Improved onboarding experience.
+  - Major UI redesign and navigation improvements.
+  - Smoother streaming and stability fixes.
+
+### 👀 v1.0.1 Preview
+
+> 🚧 Work in progress. The interface shown below is from a preview build and may change before release.
+
+<p align="center">
+  <img src="clew_v101.png" alt="Clew v1.0.1 Preview" width="900"/>
+</p>
+
+**What's new:**
+
+- ✨ New centralized workspace.
+- 🧠 Describe tasks in natural language.
+- 🏗️ Template-driven workflows.
+- 🛠️ Reusable Skills system.
+- 🚀 Faster onboarding for new users.
+- 🎯 Cleaner visual hierarchy and navigation.
+
 ---
 
 ## 📬 Contact & Support
