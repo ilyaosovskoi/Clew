@@ -5,7 +5,8 @@
 **A native, local-first AI IDE for macOS Apple Silicon.**
 The privacy-first alternative to Cursor — with a built-in model manager. Just download the `.dmg` and go.
 
-[![Platform](https://img.shields.io/badge/platform-macOS%20M1%2B%20(Silicon)-lightgrey.svg)](https://support.apple.com/en-us/HT211814)
+[![Platform](https://img.shields.io/badge/platform-macOS%20M1%2B%20(Silicon)-lightgrey.svg)]()
+[![Platform](https://img.shields.io/badge/platform-Windows%20(coming%20soon)-blue.svg)]()
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-v1.0.0--beta-blue.svg)](https://github.com/OpenSynapseLabs/Clew/releases)
 [![Status](https://img.shields.io/badge/status-beta-orange.svg)](#)
