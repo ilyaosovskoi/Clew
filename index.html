@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clew — Native AI IDE</title>
+<meta name="description" content="Clew is a native, local-first AI IDE with multi-provider support, local model inference on Apple Silicon, and intelligent agent system.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --white:#ffffff;--gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;
+  --gray-300:#d1d5db;--gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;
+  --gray-700:#374151;--gray-800:#1f2937;--gray-900:#111827;
+  --accent:#6366f1;--accent-light:#818cf8;--accent-bg:#eef2ff;
+  --green:#10b981;--green-bg:#ecfdf5;
+  --blue:#3b82f6;--blue-bg:#eff6ff;
+  --amber:#f59e0b;--amber-bg:#fffbeb;
+  --radius:12px;--radius-lg:20px;--shadow-sm:0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08);--shadow-lg:0 8px 40px rgba(0,0,0,.1);
+  --max-w:1200px;--transition:0.2s ease;
+}
+html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;color:var(--gray-800);background:var(--white);line-height:1.6;overflow-x:hidden}
+a{color:var(--accent);text-decoration:none;transition:color var(--transition)}
+a:hover{color:var(--accent-light)}
+img{max-width:100%;display:block}
+
+.container{max-width:var(--max-w);margin:0 auto;padding:0 24px}
+
+/* ---- NAV ---- */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(255,255,255,.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--gray-200);transition:box-shadow var(--transition)}
+nav.scrolled{box-shadow:var(--shadow-sm)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.25rem;color:var(--gray-900);letter-spacing:-.02em}
+.logo-mark{width:32px;height:32px;background:var(--accent);border-radius:8px;display:grid;place-items:center;color:white;font-weight:800;font-size:1rem}
+.nav-links{display:flex;align-items:center;gap:32px;list-style:none}
+.nav-links a{color:var(--gray-600);font-size:.9rem;font-weight:500;transition:color var(--transition)}
+.nav-links a:hover{color:var(--gray-900)}
+.nav-cta{background:var(--gray-900);color:white!important;padding:8px 20px;border-radius:8px;font-weight:600;font-size:.875rem;transition:background var(--transition),transform var(--transition)}
+.nav-cta:hover{background:var(--gray-700);transform:translateY(-1px);color:white!important}
+.mobile-toggle{display:none;background:none;border:none;cursor:pointer;padding:8px}
+
+/* ---- HERO ---- */
+.hero{padding:160px 0 100px;text-align:center;background:linear-gradient(180deg,var(--white) 0%,var(--gray-50) 100%)}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--accent-bg);color:var(--accent);padding:6px 16px;border-radius:100px;font-size:.8rem;font-weight:600;margin-bottom:28px;border:1px solid rgba(99,102,241,.15)}
+.hero-badge span{width:6px;height:6px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-size:clamp(2.5rem,6vw,4.25rem);font-weight:800;line-height:1.08;letter-spacing:-.035em;color:var(--gray-900);margin-bottom:24px;max-width:800px;margin-left:auto;margin-right:auto}
+.hero h1 .gradient{background:linear-gradient(135deg,var(--accent) 0%,#a855f7 50%,var(--blue) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{font-size:clamp(1rem,2vw,1.2rem);color:var(--gray-500);max-width:580px;margin:0 auto 40px;line-height:1.7}
+.hero-buttons{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border-radius:10px;font-weight:600;font-size:.95rem;border:none;cursor:pointer;transition:all var(--transition)}
+.btn-primary{background:var(--gray-900);color:white;box-shadow:var(--shadow-md)}
+.btn-primary:hover{background:var(--gray-700);transform:translateY(-2px);box-shadow:var(--shadow-lg);color:white}
+.btn-secondary{background:white;color:var(--gray-700);border:1px solid var(--gray-200);box-shadow:var(--shadow-sm)}
+.btn-secondary:hover{border-color:var(--gray-300);box-shadow:var(--shadow-md);transform:translateY(-2px);color:var(--gray-900)}
+.btn svg{width:18px;height:18px}
+.hero-meta{margin-top:56px;display:flex;justify-content:center;gap:48px;flex-wrap:wrap;color:var(--gray-400);font-size:.85rem}
+.hero-meta strong{color:var(--gray-700);font-weight:700;font-size:1.1rem;display:block}
+
+/* ---- SECTION COMMON ---- */
+section{padding:100px 0}
+.section-label{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px}
+.section-title{font-size:clamp(1.8rem,4vw,2.5rem);font-weight:800;letter-spacing:-.025em;color:var(--gray-900);margin-bottom:16px;line-height:1.15}
+.section-desc{font-size:1.05rem;color:var(--gray-500);max-width:560px;line-height:1.7}
+.section-header{text-align:center;margin-bottom:64px}
+.section-header .section-desc{margin:0 auto}
+
+/* ---- FEATURES ---- */
+.features{background:var(--white)}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.feature-card{padding:32px;border-radius:var(--radius-lg);border:1px solid var(--gray-200);background:var(--white);transition:all .3s ease}
+.feature-card:hover{border-color:var(--gray-300);box-shadow:var(--shadow-md);transform:translateY(-4px)}
+.feature-icon{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;margin-bottom:20px;font-size:1.3rem}
+.feature-icon.purple{background:var(--accent-bg);color:var(--accent)}
+.feature-icon.green{background:var(--green-bg);color:var(--green)}
+.feature-icon.blue{background:var(--blue-bg);color:var(--blue)}
+.feature-icon.amber{background:var(--amber-bg);color:var(--amber)}
+.feature-card h3{font-size:1.05rem;font-weight:700;color:var(--gray-900);margin-bottom:8px}
+.feature-card p{font-size:.9rem;color:var(--gray-500);line-height:1.65}
+
+/* ---- PROVIDERS ---- */
+.providers{background:var(--gray-50)}
+.providers-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;max-width:800px;margin:0 auto}
+.provider-chip{display:flex;align-items:center;gap:10px;padding:14px 20px;background:white;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:.9rem;font-weight:600;color:var(--gray-700);transition:all var(--transition)}
+.provider-chip:hover{border-color:var(--accent);color:var(--accent);box-shadow:var(--shadow-sm)}
+.provider-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* ---- HOW IT WORKS ---- */
+.how-it-works{background:var(--white)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:40px;counter-reset:step}
+.step{text-align:center;counter-increment:step;position:relative}
+.step::before{content:counter(step);display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-weight:800;font-size:.95rem;margin:0 auto 20px}
+.step h3{font-size:1.05rem;font-weight:700;color:var(--gray-900);margin-bottom:8px}
+.step p{font-size:.88rem;color:var(--gray-500);line-height:1.65}
+
+/* ---- CODE SECTION ---- */
+.code-section{background:var(--gray-900);color:var(--gray-100);overflow:hidden}
+.code-section .section-label{color:var(--accent-light)}
+.code-section .section-title{color:white}
+.code-section .section-desc{color:var(--gray-400)}
+.code-layout{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.code-block{background:var(--gray-800);border:1px solid var(--gray-700);border-radius:var(--radius-lg);overflow:hidden}
+.code-header{display:flex;align-items:center;gap:8px;padding:16px 20px;border-bottom:1px solid var(--gray-700)}
+.code-dot{width:12px;height:12px;border-radius:50%}
+.code-dot.r{background:#ef4444}.code-dot.y{background:#f59e0b}.code-dot.g{background:#10b981}
+.code-header span{margin-left:8px;color:var(--gray-400);font-size:.8rem}
+.code-body{padding:24px;font-family:'SF Mono',Monaco,'Cascadia Code',monospace;font-size:.82rem;line-height:1.8;overflow-x:auto;color:var(--gray-300)}
+.code-body .kw{color:#c084fc}.code-body .fn{color:#67e8f9}.code-body .str{color:#86efac}.code-body .cmt{color:var(--gray-600);font-style:italic}.code-body .num{color:#fbbf24}
+.code-features{display:flex;flex-direction:column;gap:24px}
+.code-feat{display:flex;gap:16px;align-items:flex-start}
+.code-feat-icon{width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,.15);display:grid;place-items:center;flex-shrink:0;color:var(--accent-light);font-size:1rem}
+.code-feat h4{font-size:.95rem;font-weight:600;color:white;margin-bottom:4px}
+.code-feat p{font-size:.85rem;color:var(--gray-400);line-height:1.6}
+
+/* ---- CTA ---- */
+.cta{background:linear-gradient(135deg,var(--accent) 0%,#7c3aed 50%,#a855f7 100%);text-align:center;color:white}
+.cta .section-label{color:rgba(255,255,255,.7)}
+.cta .section-title{color:white}
+.cta .section-desc{color:rgba(255,255,255,.75);margin:0 auto 40px}
+.cta .btn{background:white;color:var(--gray-900);box-shadow:0 4px 24px rgba(0,0,0,.15)}
+.cta .btn:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.25);color:var(--gray-900)}
+.cta .btn-ghost{background:transparent;color:white;border:1px solid rgba(255,255,255,.3)}
+.cta .btn-ghost:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.5);color:white}
+
+/* ---- FOOTER ---- */
+footer{padding:48px 0;border-top:1px solid var(--gray-200);background:var(--gray-50)}
+.footer-inner{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:20px}
+.footer-copy{font-size:.85rem;color:var(--gray-400)}
+.footer-links{display:flex;gap:24px;list-style:none}
+.footer-links a{font-size:.85rem;color:var(--gray-400);transition:color var(--transition)}
+.footer-links a:hover{color:var(--gray-700)}
+
+/* ---- RESPONSIVE ---- */
+@media(max-width:1024px){
+  .features-grid{grid-template-columns:repeat(2,1fr)}
+  .code-layout{grid-template-columns:1fr}
+}
+@media(max-width:768px){
+  .nav-links{display:none}
+  .mobile-toggle{display:block}
+  .nav-links.open{display:flex;flex-direction:column;position:absolute;top:64px;left:0;right:0;background:white;padding:24px;border-bottom:1px solid var(--gray-200);box-shadow:var(--shadow-md);gap:16px}
+  .features-grid{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr;gap:32px}
+  section{padding:72px 0}
+  .hero{padding:120px 0 72px}
+  .hero-meta{gap:32px}
+  .footer-inner{flex-direction:column;text-align:center}
+}
+
+/* ---- ANIMATIONS ---- */
+.fade-in{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease}
+.fade-in.visible{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="nav">
+  <div class="container nav-inner">
+    <a href="#" class="logo">
+      <div class="logo-mark">C</div>
+      Clew
+    </a>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#providers">Providers</a></li>
+      <li><a href="#how-it-works">Get Started</a></li>
+      <li><a href="https://github.com/OpenSynapseLabs/clew" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="#download" class="nav-cta">Download</a></li>
+    </ul>
+    <button class="mobile-toggle" id="mobileToggle" aria-label="Menu">
+      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge"><span></span> v1.0.3 — Now Available</div>
+    <h1>AI coding assistant that<br>runs <span class="gradient">natively</span> on your machine</h1>
+    <p>Clew is a local-first AI IDE with multi-provider support, local model inference on Apple Silicon, intelligent agents, and LSP-powered code completion &mdash; all in a single native application.</p>
+    <div class="hero-buttons">
+      <a href="#download" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download for Free
+      </a>
+      <a href="https://github.com/OpenSynapseLabs/clew" target="_blank" rel="noopener" class="btn btn-secondary">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.4-.5-1.6.1-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.3 2.8.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.2.9 2.4v3.5c0 .3.2.7.8.6A12 12 0 0012 .3"/></svg>
+        View on GitHub
+      </a>
+    </div>
+    <div class="hero-meta">
+      <div><strong>10+</strong> AI Providers</div>
+      <div><strong>Native</strong> macOS &amp; Windows</div>
+      <div><strong>Local</strong> Model Inference</div>
+      <div><strong>Open</strong> Source</div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label" style="color:var(--accent)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Features
+      </div>
+      <h2 class="section-title">Everything you need,<br>nothing you don't</h2>
+      <p class="section-desc">Built for developers who want powerful AI assistance without the overhead of cloud-only tools.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card fade-in">
+        <div class="feature-icon purple">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 014 4v2H8V6a4 4 0 014-4z"/><rect x="3" y="8" width="18" height="12" rx="2"/><line x1="8" y1="14" x2="8" y2="14.01"/><line x1="16" y1="14" x2="16" y2="14.01"/></svg>
+        </div>
+        <h3>Local-First Privacy</h3>
+        <p>Run models directly on Apple Silicon with MLX. Your code never leaves your machine. Zero data sent to cloud unless you choose a cloud provider.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon green">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
+        <h3>Multi-Provider Support</h3>
+        <p>Connect to Anthropic, OpenAI, Groq, Google, DeepSeek, Mistral, Together, OpenRouter, and more. Switch providers with a single click.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon blue">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>Agent System</h3>
+        <p>Autonomous AI agents that execute multi-step tasks, use tools, and iterate on code. Define custom skills and let agents handle complex workflows.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon amber">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        </div>
+        <h3>Auto-Model Routing</h3>
+        <p>Describe your task and Clew picks the best model. Fast models for simple queries, powerful models for complex reasoning. Automatic optimization.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon purple">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        </div>
+        <h3>Code Intelligence</h3>
+        <p>Built-in LSP client for real-time code completion, diagnostics, and navigation. Supports any language with an LSP server.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon green">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h3>Native Desktop App</h3>
+        <p>Built with Qt/PySide6 for a truly native experience on macOS and Windows. No Electron. No web wrapper. Fast, light, and responsive.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROVIDERS -->
+<section class="providers" id="providers">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label" style="color:var(--green)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Integrations
+      </div>
+      <h2 class="section-title">Works with every major AI provider</h2>
+      <p class="section-desc">One interface for all your AI models. Switch providers instantly, compare outputs, and route tasks automatically.</p>
+    </div>
+    <div class="providers-grid fade-in">
+      <div class="provider-chip"><div class="provider-dot" style="background:#d97706"></div>Anthropic Claude</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#10a37f"></div>OpenAI GPT</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#f55036"></div>Google Gemini</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#f97316"></div>Groq</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#4f46e5"></div>DeepSeek</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#ea580c"></div>Mistral</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#0ea5e9"></div>Together AI</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#8b5cf6"></div>OpenRouter</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#ec4899"></div>ZAI</div>
+      <div class="provider-chip"><div class="provider-dot" style="background:#6366f1"></div>MLX Local</div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-it-works" id="how-it-works">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label" style="color:var(--blue)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Get Started
+      </div>
+      <h2 class="section-title">Up and running in under a minute</h2>
+      <p class="section-desc">No complex setup. Download, add your API key, and start coding with AI assistance.</p>
+    </div>
+    <div class="steps">
+      <div class="step fade-in">
+        <h3>Download &amp; Install</h3>
+        <p>Get Clew for macOS (DMG) or Windows (EXE). Native install, no dependencies required. Just double-click and go.</p>
+      </div>
+      <div class="step fade-in">
+        <h3>Add Your API Key</h3>
+        <p>Open Settings and enter your API key for any supported provider. Or use local models with zero configuration on Apple Silicon.</p>
+      </div>
+      <div class="step fade-in">
+        <h3>Start Building</h3>
+        <p>Open a project, chat with AI, use agents for complex tasks, and get real-time code completions powered by LSP.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CODE SECTION -->
+<section class="code-section">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">Built for Developers</div>
+      <h2 class="section-title">Powerful, yet simple to use</h2>
+      <p class="section-desc">Agent system, token tracking, and model routing work together to give you the best AI-assisted coding experience.</p>
+    </div>
+    <div class="code-layout">
+      <div class="code-block fade-in">
+        <div class="code-header">
+          <div class="code-dot r"></div>
+          <div class="code-dot y"></div>
+          <div class="code-dot g"></div>
+          <span>agent_config.json</span>
+        </div>
+        <div class="code-body"><span class="cmt">// Define a custom agent skill</span>
+{
+  <span class="str">"name"</span>: <span class="str">"code-reviewer"</span>,
+  <span class="str">"model"</span>: <span class="str">"claude-sonnet-4-20250514"</span>,
+  <span class="str">"tools"</span>: [
+    <span class="str">"read_file"</span>,
+    <span class="str">"search"</span>,
+    <span class="str">"edit_file"</span>,
+    <span class="str">"run_tests"</span>
+  ],
+  <span class="str">"auto_route"</span>: <span class="kw">true</span>,
+  <span class="str">"max_tokens"</span>: <span class="num">8192</span>,
+  <span class="str">"system"</span>: <span class="str">"You are a senior code reviewer..."</span>
+}</div>
+      </div>
+      <div class="code-features">
+        <div class="code-feat fade-in">
+          <div class="code-feat-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+          </div>
+          <div>
+            <h4>Custom Agent Skills</h4>
+            <p>Define specialized agents with their own tools, system prompts, and model preferences. Build a team of AI assistants.</p>
+          </div>
+        </div>
+        <div class="code-feat fade-in">
+          <div class="code-feat-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+          <div>
+            <h4>Real-Time Token Tracking</h4>
+            <p>Monitor token usage per provider, per session. Automatic context management prevents unexpected cutoffs.</p>
+          </div>
+        </div>
+        <div class="code-feat fade-in">
+          <div class="code-feat-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div>
+            <h4>Intelligent Model Routing</h4>
+            <p>Describe what you need. Clew analyzes the task complexity and routes it to the most cost-effective model.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA / DOWNLOAD -->
+<section class="cta" id="download">
+  <div class="container">
+    <div class="section-label">Ready to Start?</div>
+    <h2 class="section-title">Download Clew today</h2>
+    <p class="section-desc">Free and open source. Available for macOS and Windows. Linux support coming soon.</p>
+    <div class="hero-buttons" style="margin-top:40px">
+      <a href="#" class="btn" onclick="alert('Download will be available after GitHub Release setup')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 5-3 5-6.5V8.5C21 5.42 18.58 3 15.5 3h-7C5.42 3 3 5.42 3 8.5v7C3 19.08 5.42 21.5 8.5 21.5c1.25 0 2.5-1.06 4-1.06h-.5z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        Download for macOS
+      </a>
+      <a href="#" class="btn btn-ghost" onclick="alert('Download will be available after GitHub Release setup')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Download for Windows
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-copy">&copy; 2026 Open Synapse Labs. Clew is open source under the MIT License.</div>
+    <ul class="footer-links">
+      <li><a href="https://github.com/OpenSynapseLabs/clew" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="#">Documentation</a></li>
+      <li><a href="#">Changelog</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+// Nav scroll effect
+const nav=document.getElementById('nav');
+window.addEventListener('scroll',()=>{nav.classList.toggle('scrolled',window.scrollY>10)});
+
+// Mobile toggle
+const toggle=document.getElementById('mobileToggle');
+const links=document.getElementById('navLinks');
+toggle.addEventListener('click',()=>links.classList.toggle('open'));
+links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>links.classList.remove('open')));
+
+// Scroll animations
+const obs=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target)}})
+},{threshold:0.15,rootMargin:'0px 0px -40px 0px'});
+document.querySelectorAll('.fade-in').forEach(el=>obs.observe(el));
+</script>
+</body>
+</html>
