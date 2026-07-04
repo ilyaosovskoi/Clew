@@ -9,7 +9,7 @@ A cross-platform AI IDE where anyone can bring their project to life with AI age
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-active-success.svg)](#)
 
-**[Download Latest Release](https://github.com/OpenSynapseLabs/Clew/releases)**
+**[Download Latest Release](https://github.com/ilyaosovskoi/Clew/releases)**
 
 </div>
 
@@ -73,7 +73,7 @@ Don't want to run models locally? Bring your own API keys. Clew natively support
 
 Clew comes with a built-in auto-updater. You only need to install it once!
 
-1. Go to the [Releases](https://github.com/OpenSynapseLabs/Clew/releases) page.
+1. Go to the [Releases](https://github.com/ilyaosovskoi/Clew/releases) page.
 2. Download the latest version for your platform.
 3. Install the application.
 4. Open **Settings** → Choose your theme, configure your API keys or download a local model.
@@ -156,7 +156,6 @@ We are actively developing Clew. Here is what to expect in upcoming releases:
 
 ## 📬 Contact & Support
 
-- **Email:** [opensynapselabs@proton.me](mailto:opensynapselabs@proton.me)
 - **Issues:** [GitHub Issue Tracker](https://github.com/OpenSynapseLabs/Clew/issues)
 
 ---
@@ -164,8 +163,6 @@ We are actively developing Clew. Here is what to expect in upcoming releases:
 ## 📄 License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
-
-Built with care by **Open Synapse Labs**.
 
 ---
 
