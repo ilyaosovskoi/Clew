@@ -3,32 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Clew — an AI coding agent for the models you already use</title>
-<meta name="description" content="Clew is an open-source AI coding agent. It plans before it acts, works with cloud providers or local models via Ollama and LM Studio, and keeps your spend visible.">
+<title>Clew — Native AI Coding IDE</title>
+<meta name="description" content="Clew is an open-source native AI coding IDE. 15 providers, ReAct agents, MCP support, zero telemetry. Runs on macOS, Windows, and Linux.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#1a1512;
-  --bg-alt:#1f1a15;
-  --surface:#252019;
-  --surface-2:#2b241c;
-  --border:#3c3227;
-  --border-soft:#332a20;
-  --text:#f3ece1;
-  --text-dim:#b3a692;
-  --text-dimmer:#7c7160;
-  --accent:#d97757;
-  --accent-hi:#e8916f;
-  --accent-soft:rgba(217,119,87,.14);
-  --accent-soft-border:rgba(217,119,87,.3);
-  --green:#8fb996;
+  --bg:#09090b;
+  --bg-alt:#0f0f12;
+  --surface:#141418;
+  --surface-2:#1c1c22;
+  --surface-3:#232329;
+  --border:#27272a;
+  --border-soft:#1f1f23;
+  --text:#f4f4f5;
+  --text-dim:#a1a1aa;
+  --text-dimmer:#63636e;
+  --accent:#6366f1;
+  --accent-hi:#818cf8;
+  --accent-soft:rgba(99,102,241,.10);
+  --accent-soft-border:rgba(99,102,241,.25);
+  --green:#34d399;
+  --green-soft:rgba(52,211,153,.10);
+  --amber:#fbbf24;
   --radius:10px;
-  --radius-lg:16px;
-  --max-w:1180px;
-  --serif-display:'Space Grotesk',system-ui,sans-serif;
+  --radius-lg:14px;
+  --max-w:1160px;
   --body:'Inter',system-ui,-apple-system,sans-serif;
   --mono:'JetBrains Mono',ui-monospace,monospace;
 }
@@ -39,137 +41,181 @@ a{color:var(--accent);text-decoration:none;transition:color .2s ease}
 a:hover{color:var(--accent-hi)}
 img{max-width:100%;display:block}
 .container{max-width:var(--max-w);margin:0 auto;padding:0 24px}
-h1,h2,h3,h4{font-family:var(--serif-display);color:var(--text);letter-spacing:-.01em}
+h1,h2,h3,h4{font-family:var(--body);color:var(--text);letter-spacing:-.02em;font-weight:700}
 
 /* ---- NAV ---- */
-nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(26,21,18,.82);backdrop-filter:blur(14px);border-bottom:1px solid transparent;transition:border-color .2s ease}
-nav.scrolled{border-bottom-color:var(--border-soft)}
-.nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px}
-.logo{display:flex;align-items:center;gap:10px;font-family:var(--serif-display);font-weight:700;font-size:1.15rem;color:var(--text)}
-.logo-mark{width:30px;height:30px;background:var(--accent);border-radius:8px;display:grid;place-items:center;color:#1a1512;font-weight:700;font-size:.95rem;font-family:var(--serif-display)}
-.nav-links{display:flex;align-items:center;gap:30px;list-style:none}
-.nav-links a{color:var(--text-dim);font-size:.88rem;font-weight:500}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(9,9,11,.80);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid transparent;transition:border-color .2s ease}
+nav.scrolled{border-bottom-color:var(--border)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:60px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;color:var(--text)}
+.logo-mark{width:28px;height:28px;background:var(--accent);border-radius:7px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:.85rem;font-family:var(--body)}
+.nav-links{display:flex;align-items:center;gap:28px;list-style:none}
+.nav-links a{color:var(--text-dimmer);font-size:.85rem;font-weight:500;transition:color .2s}
 .nav-links a:hover{color:var(--text)}
-.nav-cta{background:var(--accent);color:#1a1512!important;padding:8px 18px;border-radius:8px;font-weight:600;font-size:.85rem}
-.nav-cta:hover{background:var(--accent-hi);color:#1a1512!important}
+.nav-cta{background:var(--accent);color:#fff!important;padding:7px 16px;border-radius:8px;font-weight:600;font-size:.82rem;transition:background .2s}
+.nav-cta:hover{background:var(--accent-hi);color:#fff!important}
 .mobile-toggle{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text)}
 
 /* ---- HERO ---- */
-.hero{padding:150px 0 90px;background:radial-gradient(ellipse 900px 500px at 50% -10%,rgba(217,119,87,.10),transparent 60%)}
-.hero-inner{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
-.hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);color:var(--accent-hi);padding:6px 14px;border-radius:100px;font-size:.78rem;font-weight:600;margin-bottom:24px;border:1px solid var(--accent-soft-border);font-family:var(--mono)}
-.hero-badge span{width:6px;height:6px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.hero h1{font-size:clamp(2.1rem,4.2vw,3.15rem);font-weight:700;line-height:1.14;margin-bottom:20px}
+.hero{padding:140px 0 80px;background:radial-gradient(ellipse 800px 500px at 50% -5%,rgba(99,102,241,.07),transparent 60%)}
+.hero-inner{display:grid;grid-template-columns:1.1fr .9fr;gap:52px;align-items:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);color:var(--accent-hi);padding:5px 13px;border-radius:100px;font-size:.75rem;font-weight:600;margin-bottom:22px;border:1px solid var(--accent-soft-border);font-family:var(--mono)}
+.hero-badge span{width:5px;height:5px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-size:clamp(1.9rem,4vw,2.9rem);font-weight:800;line-height:1.12;margin-bottom:18px}
 .hero h1 .accent-word{color:var(--accent)}
-.hero p{font-size:1.05rem;color:var(--text-dim);max-width:480px;margin-bottom:34px;line-height:1.75}
-.hero-buttons{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:44px}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 24px;border-radius:9px;font-weight:600;font-size:.9rem;border:none;cursor:pointer;transition:all .2s ease;font-family:var(--body)}
-.btn-primary{background:var(--accent);color:#1a1512}
-.btn-primary:hover{background:var(--accent-hi);transform:translateY(-2px);color:#1a1512}
+.hero p{font-size:1.02rem;color:var(--text-dimmer);max-width:460px;margin-bottom:30px;line-height:1.75}
+.hero-buttons{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:40px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:11px 22px;border-radius:9px;font-weight:600;font-size:.88rem;border:none;cursor:pointer;transition:all .2s ease;font-family:var(--body)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-hi);transform:translateY(-1px);color:#fff}
 .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
-.btn-secondary:hover{border-color:var(--accent-soft-border);transform:translateY(-2px)}
-.btn svg{width:17px;height:17px}
-.hero-meta{display:flex;gap:36px;flex-wrap:wrap;color:var(--text-dimmer);font-size:.82rem;font-family:var(--mono)}
+.btn-secondary:hover{border-color:var(--accent-soft-border);transform:translateY(-1px)}
+.btn svg{width:16px;height:16px}
+.hero-meta{display:flex;gap:28px;flex-wrap:wrap;color:var(--text-dimmer);font-size:.8rem;font-family:var(--mono)}
 .hero-meta strong{color:var(--text-dim);font-weight:600}
 
-/* ---- HERO WIDGET (signature element) ---- */
-.plan-widget{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35)}
-.plan-widget-header{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border-soft);background:var(--surface-2)}
-.pw-dot{width:11px;height:11px;border-radius:50%}
-.pw-dot.r{background:#e0645a}.pw-dot.y{background:#e0a94f}.pw-dot.g{background:#7fb989}
-.plan-widget-header span{margin-left:8px;color:var(--text-dimmer);font-size:.78rem;font-family:var(--mono)}
-.pw-badge{margin-left:auto;background:var(--accent-soft);color:var(--accent-hi);font-size:.68rem;font-weight:700;padding:3px 9px;border-radius:5px;letter-spacing:.03em;font-family:var(--mono)}
-.plan-widget-body{padding:22px 22px 24px}
-.plan-widget-body h4{font-size:.95rem;font-weight:700;margin-bottom:14px;color:var(--text)}
-.pw-step{display:flex;align-items:flex-start;gap:10px;padding:8px 0;font-size:.86rem;color:var(--text-dimmer);border-bottom:1px dashed var(--border-soft)}
+/* ---- HERO WIDGET ---- */
+.plan-widget{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.4)}
+.plan-widget-header{display:flex;align-items:center;gap:7px;padding:12px 16px;border-bottom:1px solid var(--border-soft);background:var(--surface-2)}
+.pw-dot{width:10px;height:10px;border-radius:50%}
+.pw-dot.r{background:#ef4444}.pw-dot.y{background:#eab308}.pw-dot.g{background:#22c55e}
+.plan-widget-header span{margin-left:8px;color:var(--text-dimmer);font-size:.75rem;font-family:var(--mono)}
+.pw-badge{margin-left:auto;background:var(--accent-soft);color:var(--accent-hi);font-size:.65rem;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:.04em;font-family:var(--mono)}
+.plan-widget-body{padding:20px}
+.plan-widget-body h4{font-size:.92rem;font-weight:700;margin-bottom:14px;color:var(--text)}
+.pw-step{display:flex;align-items:flex-start;gap:10px;padding:7px 0;font-size:.84rem;color:var(--text-dimmer);border-bottom:1px dashed var(--border-soft)}
 .pw-step:last-child{border-bottom:none}
-.pw-check{flex-shrink:0;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--border);display:grid;place-items:center;margin-top:1px;transition:all .3s ease}
+.pw-check{flex-shrink:0;width:17px;height:17px;border-radius:5px;border:1.5px solid var(--border);display:grid;place-items:center;margin-top:1px;transition:all .3s ease}
 .pw-step.done .pw-check{background:var(--accent);border-color:var(--accent)}
 .pw-step.done{color:var(--text-dim)}
-.pw-check svg{width:11px;height:11px;color:#1a1512;opacity:0;transition:opacity .2s ease}
+.pw-check svg{width:10px;height:10px;color:#fff;opacity:0;transition:opacity .2s ease}
 .pw-step.done .pw-check svg{opacity:1}
 
 /* ---- SECTION COMMON ---- */
-section{padding:96px 0}
-.section-label{display:inline-flex;align-items:center;gap:7px;font-size:.76rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;margin-bottom:14px;color:var(--accent);font-family:var(--mono)}
-.section-title{font-size:clamp(1.7rem,3.4vw,2.3rem);font-weight:700;margin-bottom:14px;line-height:1.2}
-.section-desc{font-size:1rem;color:var(--text-dimmer);max-width:540px;line-height:1.7}
-.section-header{text-align:center;margin-bottom:56px}
+section{padding:88px 0}
+.section-label{display:inline-flex;align-items:center;gap:7px;font-size:.73rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;color:var(--accent);font-family:var(--mono)}
+.section-title{font-size:clamp(1.6rem,3.2vw,2.2rem);font-weight:800;margin-bottom:12px;line-height:1.2}
+.section-desc{font-size:.97rem;color:var(--text-dimmer);max-width:520px;line-height:1.7}
+.section-header{text-align:center;margin-bottom:52px}
 .section-header .section-desc{margin:0 auto}
 
+/* ---- PROMISE ---- */
+.promise{background:var(--bg-alt)}
+.promise-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.promise-card{padding:26px;border-radius:var(--radius-lg);border:1px solid var(--border-soft);background:var(--surface);transition:border-color .2s}
+.promise-card:hover{border-color:var(--border)}
+.promise-card h3{font-size:.95rem;font-weight:700;margin-bottom:8px}
+.promise-card p{font-size:.84rem;color:var(--text-dimmer);line-height:1.65}
+
 /* ---- FEATURES ---- */
-.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.feature-card{padding:28px;border-radius:var(--radius-lg);border:1px solid var(--border-soft);background:var(--surface);transition:all .25s ease}
-.feature-card:hover{border-color:var(--accent-soft-border);transform:translateY(-3px)}
-.feature-icon{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;margin-bottom:18px;background:var(--accent-soft);color:var(--accent-hi)}
-.feature-card h3{font-size:1rem;font-weight:700;margin-bottom:8px}
-.feature-card p{font-size:.87rem;color:var(--text-dimmer);line-height:1.65}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feature-card{padding:26px;border-radius:var(--radius-lg);border:1px solid var(--border-soft);background:var(--surface);transition:all .2s ease}
+.feature-card:hover{border-color:var(--accent-soft-border);transform:translateY(-2px)}
+.feature-icon{width:36px;height:36px;border-radius:8px;display:grid;place-items:center;margin-bottom:16px;background:var(--accent-soft);color:var(--accent-hi)}
+.feature-card h3{font-size:.95rem;font-weight:700;margin-bottom:7px}
+.feature-card p{font-size:.84rem;color:var(--text-dimmer);line-height:1.6}
+
+/* ---- COMPARISON TABLE ---- */
+.comparison{background:var(--bg-alt);overflow-x:auto}
+.comparison-table{width:100%;border-collapse:collapse;min-width:640px;font-size:.85rem}
+.comparison-table thead th{text-align:left;padding:12px 16px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);font-size:.8rem;white-space:nowrap}
+.comparison-table thead th:first-child{color:var(--text-dim)}
+.comparison-table tbody td{padding:12px 16px;border-bottom:1px solid var(--border-soft);color:var(--text-dim);white-space:nowrap}
+.comparison-table tbody td:first-child{font-weight:600;color:var(--text);white-space:normal;min-width:140px}
+.comparison-table .yes{color:var(--green);font-weight:600}
+.comparison-table .no{color:var(--text-dimmer)}
+.comparison-table .partial{color:var(--amber);font-weight:500}
+.comparison-table .clew-col{color:var(--accent-hi);font-weight:600}
 
 /* ---- PROVIDERS ---- */
-.providers{background:var(--bg-alt)}
-.provider-group-label{font-family:var(--mono);font-size:.75rem;color:var(--text-dimmer);text-transform:uppercase;letter-spacing:.08em;margin:0 auto 14px;max-width:900px;text-align:left}
-.providers-grid{display:flex;flex-wrap:wrap;gap:10px;max-width:900px;margin:0 auto 32px}
-.provider-chip{padding:9px 16px;background:var(--surface);border:1px solid var(--border-soft);border-radius:100px;font-size:.85rem;font-weight:500;color:var(--text-dim);font-family:var(--mono)}
+.providers{background:var(--bg)}
+.provider-group-label{font-family:var(--mono);font-size:.72rem;color:var(--text-dimmer);text-transform:uppercase;letter-spacing:.07em;margin:0 auto 12px;max-width:880px;text-align:left}
+.providers-grid{display:flex;flex-wrap:wrap;gap:9px;max-width:880px;margin:0 auto 28px}
+.provider-chip{padding:8px 14px;background:var(--surface);border:1px solid var(--border-soft);border-radius:100px;font-size:.82rem;font-weight:500;color:var(--text-dim);font-family:var(--mono);transition:border-color .2s}
+.provider-chip:hover{border-color:var(--border)}
 .provider-chip.local{border-color:var(--accent-soft-border);color:var(--text)}
-
-/* ---- SHOWCASE ---- */
-.showcase-row{display:grid;grid-template-columns:1.1fr 1fr;gap:52px;align-items:center;margin-bottom:88px}
-.showcase-row:last-child{margin-bottom:0}
-.showcase-row.rev .shot{order:2}
-.showcase-row.rev .copy{order:1}
-.shot{border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--border);box-shadow:0 24px 60px rgba(0,0,0,.35)}
-.shot img{width:100%;display:block}
-.showcase-copy .section-label{margin-bottom:10px}
-.showcase-copy h3{font-size:1.4rem;margin-bottom:12px}
-.showcase-copy p{font-size:.95rem;color:var(--text-dimmer);line-height:1.75}
 
 /* ---- HOW IT WORKS ---- */
 .how-it-works{background:var(--bg-alt)}
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:36px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:32px}
 .step{padding:0}
-.step-num{font-family:var(--mono);font-size:.8rem;color:var(--accent);margin-bottom:14px}
-.step h3{font-size:1.02rem;font-weight:700;margin-bottom:8px}
-.step p{font-size:.87rem;color:var(--text-dimmer);line-height:1.65}
+.step-num{font-family:var(--mono);font-size:.78rem;color:var(--accent);margin-bottom:12px}
+.step h3{font-size:1rem;font-weight:700;margin-bottom:7px}
+.step p{font-size:.85rem;color:var(--text-dimmer);line-height:1.65}
+
+/* ---- TECH STACK ---- */
+.tech-stack{text-align:center}
+.tech-badges{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:28px}
+.tech-badge{padding:8px 16px;background:var(--surface);border:1px solid var(--border-soft);border-radius:8px;font-size:.82rem;font-family:var(--mono);color:var(--text-dim)}
+
+/* ---- ROADMAP ---- */
+.roadmap{background:var(--bg-alt)}
+.roadmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:720px;margin:0 auto}
+.roadmap-col h3{font-size:.9rem;font-weight:700;margin-bottom:14px;color:var(--text)}
+.roadmap-list{list-style:none;display:flex;flex-direction:column;gap:10px}
+.roadmap-list li{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--text-dim)}
+.roadmap-list .done-icon{color:var(--green);flex-shrink:0;width:18px;height:18px}
+.roadmap-list .todo-icon{color:var(--text-dimmer);flex-shrink:0;width:18px;height:18px}
 
 /* ---- CONTRIBUTE ---- */
 .contribute{text-align:center}
-.contribute .section-desc{margin:0 auto 32px}
-.contribute-links{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.contribute .section-desc{margin:0 auto 28px}
+.contribute-links{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 
 /* ---- CTA ---- */
-.cta{background:linear-gradient(160deg,var(--surface) 0%,var(--bg-alt) 100%);text-align:center;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft)}
-.cta .section-desc{margin:0 auto 36px}
+.cta{background:var(--surface);text-align:center;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft)}
+.cta .section-desc{margin:0 auto 32px}
 
 /* ---- FOOTER ---- */
-footer{padding:40px 0}
-.footer-inner{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:20px}
-.footer-copy{font-size:.82rem;color:var(--text-dimmer);font-family:var(--mono)}
-.footer-links{display:flex;gap:22px;list-style:none}
-.footer-links a{font-size:.82rem;color:var(--text-dimmer)}
+footer{padding:36px 0}
+.footer-inner{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
+.footer-copy{font-size:.78rem;color:var(--text-dimmer);font-family:var(--mono)}
+.footer-links{display:flex;gap:20px;list-style:none}
+.footer-links a{font-size:.78rem;color:var(--text-dimmer)}
 .footer-links a:hover{color:var(--text-dim)}
 
 /* ---- RESPONSIVE ---- */
+@media(max-width:1200px){
+  .comparison-table{min-width:580px}
+}
 @media(max-width:1024px){
   .features-grid{grid-template-columns:repeat(2,1fr)}
-  .hero-inner{grid-template-columns:1fr;gap:48px}
+  .promise-grid{grid-template-columns:repeat(2,1fr)}
+  .hero-inner{grid-template-columns:1fr;gap:44px}
   .hero p{max-width:100%}
-  .showcase-row,.showcase-row.rev{grid-template-columns:1fr}
-  .showcase-row .shot,.showcase-row.rev .shot,.showcase-row .copy,.showcase-row.rev .copy{order:unset}
+  .roadmap-grid{grid-template-columns:1fr}
 }
 @media(max-width:768px){
   .nav-links{display:none}
   .mobile-toggle{display:block}
-  .nav-links.open{display:flex;flex-direction:column;position:absolute;top:64px;left:0;right:0;background:var(--bg);padding:22px;border-bottom:1px solid var(--border-soft);gap:16px}
+  .nav-links.open{display:flex;flex-direction:column;position:absolute;top:60px;left:0;right:0;background:var(--bg);padding:20px 24px;border-bottom:1px solid var(--border);gap:14px}
   .features-grid{grid-template-columns:1fr}
-  .steps{grid-template-columns:1fr;gap:28px}
-  section{padding:64px 0}
-  .hero{padding:112px 0 64px}
+  .promise-grid{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr;gap:24px}
+  section{padding:60px 0}
+  .hero{padding:110px 0 52px}
+  .container{padding:0 18px}
   .footer-inner{flex-direction:column;text-align:center}
+  .comparison-table{font-size:.8rem}
+  .comparison-table thead th,.comparison-table tbody td{padding:10px 12px}
+}
+@media(max-width:480px){
+  .hero h1{font-size:1.6rem}
+  .section-title{font-size:1.35rem}
+  .hero-buttons{flex-direction:column}
+  .hero-buttons .btn{justify-content:center;width:100%}
+  .hero-meta{flex-direction:column;gap:10px}
+  .contribute-links{flex-direction:column;align-items:center}
+  .contribute-links .btn{width:100%;max-width:280px;justify-content:center}
+  .tech-badges{gap:8px}
+  .tech-badge{font-size:.76rem;padding:6px 12px}
+  .providers-grid{gap:7px}
+  .provider-chip{font-size:.78rem;padding:7px 12px}
 }
 
 /* ---- FADE-IN ---- */
-.fade-in{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.fade-in{opacity:0;transform:translateY(18px);transition:opacity .5s ease,transform .5s ease}
 .fade-in.visible{opacity:1;transform:translateY(0)}
 </style>
 </head>
@@ -183,9 +229,10 @@ footer{padding:40px 0}
       Clew
     </a>
     <ul class="nav-links" id="navLinks">
+      <li><a href="#promise">Why</a></li>
       <li><a href="#features">Features</a></li>
+      <li><a href="#comparison">Compare</a></li>
       <li><a href="#providers">Providers</a></li>
-      <li><a href="#showcase">Inside Clew</a></li>
       <li><a href="https://github.com/ilyaosovskoi/Clew" target="_blank" rel="noopener">GitHub</a></li>
       <li><a href="https://github.com/ilyaosovskoi/Clew/releases/latest" target="_blank" rel="noopener" class="nav-cta">Download</a></li>
     </ul>
@@ -199,22 +246,22 @@ footer{padding:40px 0}
 <section class="hero">
   <div class="container hero-inner">
     <div>
-      <div class="hero-badge"><span></span> Open source · Apache 2.0</div>
-      <h1>An AI coding agent that shows its <span class="accent-word">plan</span> before it touches your code</h1>
-      <p>Clew describes what it's about to do, then does it — one visible step at a time. Bring your own key for any major cloud provider, or point it at a model running locally with Ollama or LM Studio.</p>
+      <div class="hero-badge"><span></span> Open source &middot; MIT</div>
+      <h1>The native AI coding IDE that <span class="accent-word">plans before it acts</span></h1>
+      <p>Clew describes what it's about to do, then does it &mdash; one visible step at a time. 15 providers, ReAct agents, MCP support, zero telemetry. Your code never leaves your machine.</p>
       <div class="hero-buttons">
         <a href="https://github.com/ilyaosovskoi/Clew/releases/latest" target="_blank" rel="noopener" class="btn btn-primary">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Download latest release
         </a>
         <a href="https://github.com/ilyaosovskoi/Clew" target="_blank" rel="noopener" class="btn btn-secondary">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.4-.5-1.6.1-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.3 2.8.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.2.9 2.4v3.5c0 .3.2.7.8.6A12 12 0 0012 .3"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.4-.5-1.6.1-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.3 2.8.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.2.9 2.4v3.5c0 .3.2.7.8.6A12 12 0 0012 .3"/></svg>
           View source
         </a>
       </div>
       <div class="hero-meta">
+        <div>macOS &middot; Windows &middot; Linux</div>
         <div>Cloud <strong>&amp;</strong> local models</div>
-        <div>macOS <strong>&amp;</strong> Windows</div>
         <div>Built <strong>in the open</strong></div>
       </div>
     </div>
@@ -222,7 +269,7 @@ footer{padding:40px 0}
     <div class="plan-widget fade-in">
       <div class="plan-widget-header">
         <div class="pw-dot r"></div><div class="pw-dot y"></div><div class="pw-dot g"></div>
-        <span>clew · agent</span>
+        <span>clew &middot; agent</span>
         <div class="pw-badge">PLAN</div>
       </div>
       <div class="plan-widget-body">
@@ -239,57 +286,199 @@ footer{padding:40px 0}
   </div>
 </section>
 
+<!-- PROMISE -->
+<section class="promise" id="promise">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">The Promise</div>
+      <h2 class="section-title">Cursor + LM Studio + Multi-API Gateway, in one app</h2>
+      <p class="section-desc">No Python dependencies to install. No telemetry. Absolute privacy for local models, with the flexibility to plug in cloud APIs.</p>
+    </div>
+    <div class="promise-grid">
+      <div class="promise-card fade-in">
+        <h3>Privacy-First</h3>
+        <p>Local models run 100% on-device. No telemetry, no tracking, no cloud unless you want it.</p>
+      </div>
+      <div class="promise-card fade-in">
+        <h3>15 AI Providers</h3>
+        <p>Anthropic, OpenAI, Gemini, DeepSeek, Groq, xAI, z.ai, or run Llama/Mistral/Qwen locally via Ollama or LM Studio.</p>
+      </div>
+      <div class="promise-card fade-in">
+        <h3>Native Performance</h3>
+        <p>Qt-powered desktop app with real-time streaming, instant file search, live token tracking.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- FEATURES -->
 <section id="features">
   <div class="container">
     <div class="section-header">
       <div class="section-label">Features</div>
       <h2 class="section-title">Built around trust, not just speed</h2>
-      <p class="section-desc">The things that matter when you're letting something else touch your code: what it plans to do, what it costs, and how it fits the way you already work.</p>
+      <p class="section-desc">What matters when you're letting something else touch your code: what it plans, what it costs, and how it fits the way you work.</p>
     </div>
     <div class="features-grid">
       <div class="feature-card fade-in">
         <div class="feature-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
         </div>
         <h3>Plans before it acts</h3>
-        <p>Before editing a file, Clew lays out its plan in plain language, then checks off each step as it happens. You always know what's about to change.</p>
+        <p>Before editing a file, Clew lays out its plan in plain language, then checks off each step. You always know what's about to change.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         </div>
         <h3>Any model, one interface</h3>
-        <p>Cloud providers or models running on your own machine through Ollama and LM Studio. Switch which one is active without leaving the project.</p>
+        <p>15 cloud providers or models on your own machine through Ollama and LM Studio. Switch the active model without leaving the project.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         </div>
-        <h3>Budget guardrails built in</h3>
-        <p>Token usage, cost per provider, and burn rate, tracked live. Set a monthly limit and see exactly where you stand — no surprise bills.</p>
+        <h3>Budget guardrails</h3>
+        <p>Token usage, cost per provider, and burn rate, tracked live. Set a monthly limit and see where you stand &mdash; no surprise bills.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
         </div>
-        <h3>Reads your project first</h3>
-        <p>Clew looks at your actual file tree and existing code before making changes, instead of guessing at conventions from a single open file.</p>
+        <h3>Smart context</h3>
+        <p>Git-aware filtering, relevance ranking, token budgeting, and live indexing. Clew reads your real project structure before proposing changes.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.2-.3-.4-.7-.4-1.1 0-.8.7-1.5 1.5-1.5H16c3.3 0 6-2.7 6-6 0-5-4.5-9-10-9z"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         </div>
-        <h3>Make it yours</h3>
-        <p>Eight built-in themes, from a warm charcoal-and-clay look to bold vivid gradients, plus adjustable text size for long sessions.</p>
+        <h3>MCP Protocol</h3>
+        <p>Built-in MCP client and manager. Connect external tools and knowledge bases &mdash; MCP tools appear alongside built-in agent tools.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
         </div>
-        <h3>Free and open, on purpose</h3>
-        <p>Apache 2.0 licensed. The code, the roadmap, and the bugs are all public — and contributions are genuinely welcome.</p>
+        <h3>Auto-Router</h3>
+        <p>Complexity-based provider and model selection with fallback chains. Automatically picks the best model for each task.</p>
       </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.2-.3-.4-.7-.4-1.1 0-.8.7-1.5 1.5-1.5H16c3.3 0 6-2.7 6-6 0-5-4.5-9-10-9z"/></svg>
+        </div>
+        <h3>Plugins &amp; Skills</h3>
+        <p>Drop .py plugins for custom providers and API routes. SKILL.md packages guide agent behavior with YAML frontmatter activation.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M11 18H8a2 2 0 01-2-2V9"/></svg>
+        </div>
+        <h3>Git &amp; Memory</h3>
+        <p>Built-in git tools: status, diff, stage, commit. Cross-chat memory with structured metadata so prior sessions inform new ones.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>LSP Integration</h3>
+        <p>Python language server for autocomplete, hover, go-to-definition, and diagnostics &mdash; all running in a background thread.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARISON -->
+<section class="comparison" id="comparison">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">Compare</div>
+      <h2 class="section-title">What makes Clew different</h2>
+      <p class="section-desc">A feature-by-feature look at how Clew stacks up against the alternatives.</p>
+    </div>
+    <div class="fade-in" style="overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--border-soft)">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="clew-col">Clew</th>
+            <th>Cursor / Cline</th>
+            <th>Windsurf</th>
+            <th>Claude Desktop</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Native desktop</td>
+            <td class="clew-col">Qt/PySide6, offline-capable</td>
+            <td>Web/Electron</td>
+            <td>Electron</td>
+            <td>Electron</td>
+          </tr>
+          <tr>
+            <td>Local-first privacy</td>
+            <td class="yes">Zero telemetry, 100% offline</td>
+            <td class="partial">Partial</td>
+            <td class="partial">Partial</td>
+            <td class="no">Cloud-only</td>
+          </tr>
+          <tr>
+            <td>Autonomous agents</td>
+            <td class="yes">ReAct + JSON tool calling</td>
+            <td class="yes">Yes</td>
+            <td class="yes">Yes</td>
+            <td class="partial">Limited</td>
+          </tr>
+          <tr>
+            <td>Provider count</td>
+            <td class="clew-col">15 native + 200+ via OpenRouter</td>
+            <td>5&ndash;10</td>
+            <td>3&ndash;5</td>
+            <td>1 (Anthropic)</td>
+          </tr>
+          <tr>
+            <td>MCP Protocol</td>
+            <td class="yes">Built-in client &amp; manager</td>
+            <td>Plugin</td>
+            <td class="no">No</td>
+            <td class="yes">Yes</td>
+          </tr>
+          <tr>
+            <td>Smart context</td>
+            <td class="clew-col">Git-aware, ranked, token-budgeted</td>
+            <td class="yes">Yes</td>
+            <td class="yes">Yes</td>
+            <td class="partial">Limited</td>
+          </tr>
+          <tr>
+            <td>Auto-Router</td>
+            <td class="yes">Complexity-based + fallbacks</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Plugin system</td>
+            <td class="yes">Custom providers, routes, JS/CSS</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Live token tracking</td>
+            <td class="yes">Real-time, per-provider quotas</td>
+            <td class="partial">Basic</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Open source</td>
+            <td class="yes">MIT</td>
+            <td class="no">Proprietary</td>
+            <td class="partial">Partial</td>
+            <td class="no">Proprietary</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
@@ -300,7 +489,7 @@ footer{padding:40px 0}
     <div class="section-header">
       <div class="section-label">Providers</div>
       <h2 class="section-title">Bring the model you already trust</h2>
-      <p class="section-desc">Clew doesn't lock you into one lab. Add a key for the providers you use, or skip the cloud entirely and run everything on your own hardware.</p>
+      <p class="section-desc">Add a key for the providers you use, or skip the cloud entirely and run everything on your own hardware.</p>
     </div>
     <div class="provider-group-label">Cloud</div>
     <div class="providers-grid fade-in">
@@ -309,7 +498,7 @@ footer{padding:40px 0}
       <div class="provider-chip">OpenRouter</div>
       <div class="provider-chip">Groq</div>
       <div class="provider-chip">DeepSeek</div>
-      <div class="provider-chip">Z.AI</div>
+      <div class="provider-chip">z.ai</div>
       <div class="provider-chip">Gemini</div>
       <div class="provider-chip">Mistral</div>
       <div class="provider-chip">Together</div>
@@ -323,62 +512,7 @@ footer{padding:40px 0}
       <div class="provider-chip local">Ollama</div>
       <div class="provider-chip local">LM Studio</div>
     </div>
-  </div>
-</section>
-
-<!-- SHOWCASE -->
-<section id="showcase">
-  <div class="container">
-    <div class="section-header">
-      <div class="section-label">Inside Clew</div>
-      <h2 class="section-title">What it actually looks like</h2>
-      <p class="section-desc">No mockups — these are real screens from the app.</p>
-    </div>
-
-    <div class="showcase-row fade-in">
-      <div class="shot"><img src="assets/plan.webp" alt="Clew agent showing a numbered plan before executing a task" loading="lazy"></div>
-      <div class="copy showcase-copy">
-        <div class="section-label">Transparency</div>
-        <h3>The plan comes before the diff</h3>
-        <p>Ask for something and Clew writes out its plan first — the files it'll look at, the edge cases it's accounting for, the tests it intends to run — then works through it step by step. It's the difference between an agent you supervise and one you just hope did the right thing.</p>
-      </div>
-    </div>
-
-    <div class="showcase-row rev fade-in">
-      <div class="shot"><img src="assets/usage.webp" alt="Clew usage panel showing tokens, cost, burn rate, and a monthly budget" loading="lazy"></div>
-      <div class="copy showcase-copy">
-        <div class="section-label">Cost control</div>
-        <h3>Know what you're spending, as you spend it</h3>
-        <p>A live view of total tokens, estimated cost, and burn rate, split out by provider. Set a monthly budget once and Clew tracks your usage against it automatically — useful the moment you start mixing paid APIs with free-tier or local models.</p>
-      </div>
-    </div>
-
-    <div class="showcase-row fade-in">
-      <div class="shot"><img src="assets/providers.webp" alt="Clew settings screen for configuring model providers and API keys" loading="lazy"></div>
-      <div class="copy showcase-copy">
-        <div class="section-label">Flexibility</div>
-        <h3>One settings screen, every provider</h3>
-        <p>Every provider gets the same layout: model name, API key, a test button, and a switch to make it the active one. Cloud and local providers sit side by side, so trying a new model is a config change, not a migration.</p>
-      </div>
-    </div>
-
-    <div class="showcase-row rev fade-in">
-      <div class="shot"><img src="assets/themes.webp" alt="Clew appearance settings showing multiple color themes" loading="lazy"></div>
-      <div class="copy showcase-copy">
-        <div class="section-label">Personalization</div>
-        <h3>Eight themes, one of which shaped this page</h3>
-        <p>Ember — the warm charcoal-and-clay theme shown here — is also where this site got its palette. If dark-and-warm isn't your thing, Aurora leans into vivid gradients, Clay stays bright and cream-toned, and System just follows your OS.</p>
-      </div>
-    </div>
-
-    <div class="showcase-row fade-in">
-      <div class="shot"><img src="assets/files.webp" alt="Clew file browser showing a project's folder structure" loading="lazy"></div>
-      <div class="copy showcase-copy">
-        <div class="section-label">Context</div>
-        <h3>It sees the project, not just the prompt</h3>
-        <p>A file browser sits alongside the chat so you can see exactly what Clew has access to. It reads real project structure before proposing changes, rather than working blind from whatever you happened to paste in.</p>
-      </div>
-    </div>
+    <p style="text-align:center;color:var(--text-dimmer);font-size:.82rem;margin-top:8px;font-family:var(--mono)">...and 200+ more models via OpenRouter gateway</p>
   </div>
 </section>
 
@@ -394,31 +528,115 @@ footer{padding:40px 0}
       <div class="step fade-in">
         <div class="step-num">01</div>
         <h3>Install Clew</h3>
-        <p>Download the native app for macOS or Windows from the latest GitHub release.</p>
+        <p>Download the native app for macOS, Windows, or Linux from the latest GitHub release. Requires Python 3.11+.</p>
       </div>
       <div class="step fade-in">
         <div class="step-num">02</div>
         <h3>Connect a model</h3>
-        <p>Paste an API key for any supported cloud provider, or point Clew at a local Ollama or LM Studio server.</p>
+        <p>Paste an API key for any supported cloud provider, or point Clew at a local Ollama or LM Studio server. Auto-detection included.</p>
       </div>
       <div class="step fade-in">
         <div class="step-num">03</div>
         <h3>Describe the task</h3>
-        <p>Open a project and tell Clew what you need in plain language. Review the plan, then let it run.</p>
+        <p>Open a project and tell Clew what you need in plain language. Review the plan, then let the agent read, write, and execute code.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section class="tech-stack" id="tech-stack">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">Tech Stack</div>
+      <h2 class="section-title">Zero runtime dependencies for core features</h2>
+      <p class="section-desc">No Docker, no Redis, no Node.js. Just Python + Qt. Native desktop with an embedded HTML5 frontend.</p>
+    </div>
+    <div class="tech-badges fade-in">
+      <div class="tech-badge">Python 3.11+</div>
+      <div class="tech-badge">PySide6 / Qt 6.6+</div>
+      <div class="tech-badge">HTML5 / JS / CSS</div>
+      <div class="tech-badge">SQLite</div>
+      <div class="tech-badge">python-lsp-server</div>
+      <div class="tech-badge">Pure subprocess Git</div>
+      <div class="tech-badge">MCP Client</div>
+      <div class="tech-badge">Plugin System</div>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section class="roadmap" id="roadmap">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">Roadmap</div>
+      <h2 class="section-title">What's next</h2>
+    </div>
+    <div class="roadmap-grid fade-in">
+      <div class="roadmap-col">
+        <h3>Done</h3>
+        <ul class="roadmap-list">
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Multi-provider support (15 + OpenRouter)
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            ReAct agent with JSON tool calling
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            MCP protocol integration
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Smart context &amp; Git integration
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Auto-Router, LSP, Plugins, Skills
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Live token tracking &amp; daily quotas
+          </li>
+        </ul>
+      </div>
+      <div class="roadmap-col">
+        <h3>Planned</h3>
+        <ul class="roadmap-list">
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Multi-agent "Heavy Code" mode
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Voice mode &mdash; speak tasks, hear explanations
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Web UI for remote access
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Team collaboration &amp; shared sessions
+          </li>
+        </ul>
       </div>
     </div>
   </div>
 </section>
 
 <!-- CONTRIBUTE -->
-<section class="contribute">
+<section class="contribute" id="contribute">
   <div class="container">
     <div class="section-label" style="justify-content:center;display:flex">Built in the open</div>
-    <h2 class="section-title">One developer, a lot still to build</h2>
-    <p class="section-desc">Clew is a solo project so far, shaped with help from AI along the way. It's rough in places and that's exactly why more hands would help — trying it and filing an issue is as valuable as a pull request.</p>
+    <h2 class="section-title">Contributions welcome</h2>
+    <p class="section-desc">Clew is a solo project shaped with help from AI. It's rough in places and that's exactly why more hands would help &mdash; trying it and filing an issue is as valuable as a pull request.</p>
     <div class="contribute-links">
       <a href="https://github.com/ilyaosovskoi/Clew/issues" target="_blank" rel="noopener" class="btn btn-secondary">Report a bug</a>
       <a href="https://github.com/ilyaosovskoi/Clew" target="_blank" rel="noopener" class="btn btn-secondary">Read the code</a>
+      <a href="https://github.com/ilyaosovskoi/Clew" target="_blank" rel="noopener" class="btn btn-secondary">Contribute</a>
     </div>
   </div>
 </section>
@@ -428,7 +646,7 @@ footer{padding:40px 0}
   <div class="container">
     <div class="section-label" style="justify-content:center;display:flex">Ready when you are</div>
     <h2 class="section-title">Download Clew</h2>
-    <p class="section-desc">Free and open source, for macOS and Windows. The link below always points to the current release.</p>
+    <p class="section-desc">Free and open source under the MIT License, for macOS, Windows, and Linux.</p>
     <div class="hero-buttons" style="justify-content:center">
       <a href="https://github.com/ilyaosovskoi/Clew/releases/latest" target="_blank" rel="noopener" class="btn btn-primary">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -441,7 +659,7 @@ footer{padding:40px 0}
 <!-- FOOTER -->
 <footer>
   <div class="container footer-inner">
-    <div class="footer-copy">© <span id="year"></span> Clew — open source under the Apache 2.0 License.</div>
+    <div class="footer-copy">&copy; <span id="year"></span> Clew &mdash; open source under the MIT License.</div>
     <ul class="footer-links">
       <li><a href="https://github.com/ilyaosovskoi/Clew" target="_blank" rel="noopener">GitHub</a></li>
       <li><a href="https://github.com/ilyaosovskoi/Clew/releases" target="_blank" rel="noopener">Releases</a></li>
@@ -451,26 +669,21 @@ footer{padding:40px 0}
 </footer>
 
 <script>
-// Footer year, always current
 document.getElementById('year').textContent = new Date().getFullYear();
 
-// Nav scroll effect
 const nav=document.getElementById('nav');
 window.addEventListener('scroll',()=>{nav.classList.toggle('scrolled',window.scrollY>10)});
 
-// Mobile toggle
 const toggle=document.getElementById('mobileToggle');
 const links=document.getElementById('navLinks');
 toggle.addEventListener('click',()=>links.classList.toggle('open'));
 links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>links.classList.remove('open')));
 
-// Scroll animations
 const obs=new IntersectionObserver((entries)=>{
   entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target)}})
-},{threshold:0.12,rootMargin:'0px 0px -40px 0px'});
+},{threshold:0.1,rootMargin:'0px 0px -30px 0px'});
 document.querySelectorAll('.fade-in').forEach(el=>obs.observe(el));
 
-// Hero plan widget: check off steps in a loop
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pwSteps = document.querySelectorAll('#pwSteps .pw-step');
 let pwIndex = 0;
