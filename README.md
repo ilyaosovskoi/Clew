@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src=".clew-source/assets/logo.png" alt="Clew Logo" width="180"/>
+<img src="./clew-source/assets/logo.png" alt="Clew Logo" width="180"/>
 
 <br/>
 
