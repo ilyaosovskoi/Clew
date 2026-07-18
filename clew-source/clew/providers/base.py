@@ -1,0 +1,195 @@
+"""
+Provider base class — every backend implements this.
+
+The contract is intentionally minimal:
+  - load()    → warm up model / validate API key
+  - generate()→ blocking, returns a single ProviderResponse
+  - stream()  → generator yielding token chunks
+  - unload()  → release resources
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field, asdict
+from enum import Enum
+from typing import Any, Dict, Generator, List, Optional
+
+logger = logging.getLogger(__name__)
+
+
+# ── Data classes ────────────────────────────────────────────────────
+
+class ProviderCapability(str, Enum):
+    """What a provider can do — used by the UI to grey out unsupported features."""
+    CHAT          = "chat"
+    STREAMING     = "streaming"
+    TOOL_CALLING  = "tool_calling"
+    VISION        = "vision"
+    JSON_MODE     = "json_mode"
+    SYSTEM_PROMPT = "system_prompt"
+    SKILLS        = "skills"           # accepts a skill injection in system prompt
+    OFFLINE       = "offline"          # works without internet
+
+
+@dataclass
+class ProviderMessage:
+    """One message in a conversation."""
+    role: str                       # "system" | "user" | "assistant" | "tool"
+    content: str
+    name: Optional[str] = None
+    tool_call_id: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        d: Dict[str, Any] = {"role": self.role, "content": self.content}
+        if self.name:           d["name"] = self.name
+        if self.tool_call_id:   d["tool_call_id"] = self.tool_call_id
+        if self.tool_calls:     d["tool_calls"] = self.tool_calls
+        return d
+
+
+@dataclass
+class ProviderConfig:
+    """Configuration for a provider instance."""
+    provider_id: str                # "ollama" | "lmstudio" | "openai" | "anthropic" | "openrouter" | "groq"
+    model: str                      # provider-specific model identifier
+    api_key: Optional[str] = None
+    api_base: Optional[str] = None  # override base URL
+    temperature: float = 0.2
+    max_tokens: int = 4096
+    top_p: float = 0.95
+    stream: bool = True
+    timeout: float = 120.0          # seconds
+
+    # Extras (free-form per provider)
+    extra: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ProviderResponse:
+    """Response from a non-streaming generate() call."""
+    text: str
+    model: str
+    provider: str
+    finish_reason: str = "stop"
+    tokens_in: int = 0
+    tokens_out: int = 0
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    raw: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+class ProviderError(Exception):
+    """Raised when a provider fails to load or generate."""
+
+
+# ── Abstract Provider ───────────────────────────────────────────────
+
+class Provider(ABC):
+    """Abstract base — all backends implement this."""
+
+    #: Stable identifier ("local", "openai", …) — matches ProviderConfig.provider_id
+    provider_id: str = "base"
+
+    #: Human-readable label shown in the UI switcher
+    label: str = "Base"
+
+    #: Default model when user picks this provider without specifying one
+    default_model: str = ""
+
+    #: Capabilities advertised to the UI
+    capabilities: frozenset = frozenset({ProviderCapability.CHAT})
+
+    def __init__(self, config: ProviderConfig):
+        self.config = config
+        self._loaded = False
+        self._lock = threading.RLock()
+        self._info: Dict[str, Any] = {}
+        logger.info(f"[{self.provider_id}] Provider instantiated · model={config.model}")
+
+    # ── Lifecycle ──────────────────────────────────────────────────
+
+    @abstractmethod
+    def load(self) -> bool:
+        """Warm up the model / validate credentials. Return True on success."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def unload(self) -> None:
+        """Release model weights / close HTTP sessions."""
+        raise NotImplementedError
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._loaded
+
+    @property
+    def info(self) -> Dict[str, Any]:
+        """Runtime info (RAM used, model path, latency, …)."""
+        return self._info
+
+    # ── Generation ────────────────────────────────────────────────
+
+    @abstractmethod
+    def generate(
+        self,
+        messages: List[ProviderMessage],
+        *,
+        skill: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        stop: Optional[List[str]] = None,
+    ) -> ProviderResponse:
+        """Blocking generation — returns a single response."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def stream(
+        self,
+        messages: List[ProviderMessage],
+        *,
+        skill: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        stop: Optional[List[str]] = None,
+    ) -> Generator[str, None, None]:
+        """Streaming generation — yields token chunks."""
+        raise NotImplementedError
+
+    # ── Helpers ───────────────────────────────────────────────────
+
+    def _inject_skill(self, messages: List[ProviderMessage], skill: Optional[str]) -> List[ProviderMessage]:
+        """
+        Inject a Skill into the system prompt.
+
+        A Skill is a structured instruction block (like the one you sent me
+        at the start of this conversation) that sharpens the model on one
+        capability without fine-tuning. We prepend it to any existing
+        system message so the skill reads as the model's "job description".
+        """
+        if not skill:
+            return messages
+
+        skill_block = (
+            "# ACTIVE SKILL\n\n"
+            f"{skill.strip()}\n\n"
+            "# END SKILL\n"
+            "Follow the skill above for the duration of this conversation.\n"
+        )
+
+        if messages and messages[0].role == "system":
+            new_sys = ProviderMessage(
+                role="system",
+                content=messages[0].content + "\n\n" + skill_block,
+            )
+            return [new_sys] + messages[1:]
+        return [ProviderMessage(role="system", content=skill_block)] + messages
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} model={self.config.model!r} loaded={self._loaded}>"

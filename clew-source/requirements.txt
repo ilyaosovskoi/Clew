@@ -1,0 +1,21 @@
+# Core runtime dependencies for Clew v1.0.4
+# Install: pip install -r requirements.txt
+
+# GUI framework
+PySide6>=6.7.0
+
+# macOS-only: needed for the transparent-titlebar native window styling
+# in clew/main_window.py (traffic lights over content, no gray strip,
+# while keeping native rounded corners + drop shadow).
+pyobjc-framework-Cocoa>=10.0; sys_platform == "darwin"
+
+# AI providers
+anthropic>=0.28.0
+openai>=1.30.0
+groq>=0.9.0
+
+# Utilities
+requests>=2.31.0
+aiohttp>=3.9.0
+pydantic>=2.6.0
+

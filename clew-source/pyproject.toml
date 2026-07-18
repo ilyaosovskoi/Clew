@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clew"
+version = "1.1.0"
+description = "Clew v1.1.0 — Native, local-first AI IDE with multi-provider support, MCP, multi-agent Heavy Code mode, and intelligent agent system"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Clew Contributors" }
+]
+keywords = [
+    "ai", "ide", "agent", "llm", "clew",
+    "macos", "apple-silicon",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: IDEs",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: MacOS :: MacOS X",
+    "Environment :: MacOS X",
+    "Environment :: X11 Applications :: Qt",
+]
+requires-python = ">=3.11"
+
+dependencies = [
+    # Core UI — Qt hosts the HTML frontend via QWebEngineView.
+    # WebEngine ships as part of the PySide6 wheel (no separate package).
+    "PySide6>=6.6.0",
+    "PySide6-Addons>=6.6.0",  # ensures WebEngine + QtWebChannel binaries are installed
+    # API providers (use raw urllib — no SDK lock-in)
+    # Utils
+    "pydantic>=2.7.0",
+    "toml>=0.10.2",
+    "pyyaml>=6.0",
+    "pygments>=2.18.0",
+    "rich>=13.7.0",
+]
+
+[project.optional-dependencies]
+macos = [
+    # Needed for the transparent-titlebar native window styling in
+    # clew/main_window.py (traffic lights over content, no gray strip,
+    # while keeping native rounded corners + drop shadow).
+    "pyobjc-framework-Cocoa>=10.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-qt>=4.2",
+    "black>=24.0",
+    "mypy>=1.10",
+    "py2app>=0.28",   # for .dmg builds on macOS
+]
+
+[project.urls]
+Homepage = "https://github.com/clew-ide/clew"
+Repository = "https://github.com/clew-ide/clew"
+Issues = "https://github.com/clew-ide/clew/issues"
+Documentation = "https://github.com/clew-ide/clew#readme"
+
+[project.scripts]
+clew = "clew.__main__:main"
+clew-gui = "clew.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["clew*"]
+
+[tool.setuptools.package-data]
+clew = [
+    "assets/*", "assets/**/*",
+    "web/*", "web/**/*",
+    "skills/*", "skills/**/*",
+]
+
+# ── py2app configuration for .dmg builds ────────────────────────────────
+[tool.py2app]
+app = ["clew/__main__.py"]
+iconfile = "assets/logo.icns"
+bundle-identifier = "io.clew.app"
+name = "Clew"
+version = "1.1.0"
+# py2app tends to over-package. These excludes drop ~600 MB of unused deps.
+excludes = [
+    "tkinter", "test", "tests", "unittest",
+    "PyQt5", "PyQt6", "PySide2",
+    "matplotlib", "numpy.testing",
+    "IPython", "notebook", "jupyter",
+]
+includes = [
+    "PySide6", "shiboken6",
+]
+resources = ["assets", "clew/web"]
+plist-file = "Info.plist"
