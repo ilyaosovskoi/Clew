@@ -73,7 +73,6 @@ Key reference documents in `docs/`:
 | `CHANGELOG.md` | Release history |
 | `CONTRIBUTING.md` | Contributor guidelines |
 | `REFACTORING.md` | v2.0 refactoring decisions and rationale |
-| `codex-vs-clew-comparison.md` | Feature comparison with OpenAI Codex |
 | `guardian-implementation-status.md` | Guardian feature development tracker |
 
 Remove `FIXES.md` — all bugs described there were already fixed, and the file was outdated.
