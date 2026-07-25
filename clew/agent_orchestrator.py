@@ -249,12 +249,14 @@ def _patch_with_progressive_tools(runtime) -> None:
     # Register the select_tools handler in ToolEngine._dispatch
     _original_dispatch = runtime.tools._dispatch
 
-    def _dispatch_with_select_tools(call) -> str:
+    def _dispatch_with_select_tools(self, call) -> str:  # self is the ToolEngine instance
         name = call.name
         name_value = name.value if hasattr(name, 'value') else str(name)
 
         if name_value == "select_tools":
             return _handle_select_tools(runtime, call.args)
+        elif name_value == "search_tools":
+            return _handle_search_tools(runtime, call.args)
 
         return _original_dispatch(call)
 
@@ -313,6 +315,17 @@ def _handle_select_tools(runtime, args: Dict[str, Any]) -> str:
         result_parts.append(definitions)
 
     return "\n".join(result_parts)
+
+
+def _handle_search_tools(runtime, args: Dict[str, Any]) -> str:
+    """Handle the search_tools meta-tool call."""
+    from clew.progressive_tools import search_tools
+
+    query = args.get("query", "")
+    if not isinstance(query, str):
+        return "[SEARCH_TOOLS ERROR] query must be a string"
+
+    return search_tools(query)
 
 
 def _build_tool_definitions(runtime, tool_names: List[str]) -> str:

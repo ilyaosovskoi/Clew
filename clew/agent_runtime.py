@@ -325,6 +325,8 @@ class ToolName(Enum):
     # "agentic search instead of pre-loading" pattern.
     GREP = "grep"
     GLOB = "glob"
+    # v2.0.0: Progressive tool disclosure — search tool catalog
+    SEARCH_TOOLS = "search_tools"
 
 
 class AgentEvent(Enum):
@@ -1235,6 +1237,7 @@ class ToolEngine:
             # "office_*" section gate above; here we just route to the
             # matching OfficeWorker method.
             ToolName.OFFICE_CREATE: lambda: self._office_dispatch(
+                "create",)
                 "create", path=args.get("path", ""),
                 template=args.get("template", "blank"),
             ),
@@ -1380,6 +1383,8 @@ class ToolEngine:
                 path=args.get("path", "."),
                 max_results=int(args.get("max_results", 100) or 100),
             ),
+            # v2.0.0: Progressive tool disclosure — search tool catalog
+            ToolName.SEARCH_TOOLS: lambda: self._search_tools_handler(args),
         }
 
         if name not in dispatch_map:

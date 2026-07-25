@@ -70,8 +70,8 @@ class CommandPalette(ModalScreen):
         max-width: 80;
         height: auto;
         max-height: 22;
-        background: $panel;
-        border: tall $accent;
+        background: #161b22;
+        border: tall $accent;  /* builtin variable OK */
         padding: 0;
         margin-bottom: 4;
     }
@@ -86,7 +86,7 @@ class CommandPalette(ModalScreen):
 
     #palette-filter {
         height: 3;
-        border: tall $accent;
+        border: tall $accent;  /* builtin variable OK */
         margin: 0 1;
         padding: 0;
     }

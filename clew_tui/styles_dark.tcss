@@ -1,63 +1,48 @@
 /* styles_dark.tcss - Clew TUI dark theme */
 
-/* Define CSS variables on Screen */
+/* Global styling */
 Screen {
-    --background: #0d1117;
-    --surface: #161b22;
-    --primary: #238636;
-    --foreground: #c9d1d9;
-    --muted: #8b949e;
-    --border: #238636;
-    --highlight: #f0f6fc;
-}
-
-/* Base styles with transitions for smooth animation */
-Screen {
-    background: var(--background);
-    color: var(--foreground);
-    transition: background 0.3s ease, color 0.3s ease;
+    background: #0d1117;
+    color: #c9d1d9;
 }
 
 /* -- Status Bar -- */
 StatusBar {
     dock: top;
     height: 3;
-    background: var(--surface);
-    color: var(--foreground);
-    border-bottom: tall var(--border);
-    transition: background 0.3s ease, color 0.3s ease, border-bottom 0.3s ease;
+    background: #161b22;
+    color: #c9d1d9;
+    border-bottom: tall #238636;
 }
 
 /* -- Chat Log -- */
 ChatLog {
     height: 1fr;
-    background: var(--background);
+    background: #0d1117;
     padding: 1 2;
     scrollbar-size: 1 1;
-    transition: background 0.3s ease;
 }
 
 ChatLog:focus {
-    scrollbar-color: var(--primary);
+    scrollbar-color: #238636;
 }
 
 /* -- Input Box -- */
 InputBox {
     dock: bottom;
     height: 3;
-    border: tall var(--border);
+    border: tall #238636;
     margin: 0 2 1 2;
-    background: var(--surface);
-    transition: border 0.3s ease, background 0.3s ease;
+    background: #161b22;
 }
 
 InputBox:focus {
-    border: tall var(--primary);
-    background: var(--surface);
+    border: tall #238636;
+    background: #161b22;
 }
 
 InputBox:focus-within {
-    border: tall var(--primary);
+    border: tall #238636;
 }
 
 /* -- Command Suggestions (inline, above input) -- */
@@ -76,10 +61,9 @@ CommandSuggestions.visible {
 #suggestions-box {
     height: auto;
     max-height: 12;
-    background: var(--surface);
-    border: tall var(--border);
+    background: #161b22;
+    border: tall #238636;
     padding: 0 1;
-    transition: background 0.3s ease, border 0.3s ease;
 }
 
 #suggestions-box OptionList {
@@ -89,10 +73,9 @@ CommandSuggestions.visible {
 
 #suggestions-footer {
     height: 1;
-    color: var(--muted);
+    color: #8b949e;
     padding: 0 1;
     text-style: italic;
-    transition: color 0.3s ease;
 }
 
 /* -- Approval Modal -- */
@@ -105,9 +88,8 @@ ApprovalModal {
     max-width: 100;
     height: auto;
     padding: 1 2;
-    border: thick #ffa500; /* orange */
-    background: var(--surface);
-    transition: background 0.3s ease, border 0.3s ease;
+    border: thick #ffa500;
+    background: #161b22;
 }
 
 #approval-title {
@@ -117,11 +99,11 @@ ApprovalModal {
 }
 
 #approval-action {
-    color: var(--foreground);
+    color: #c9d1d9;
 }
 
 #approval-summary {
-    color: var(--muted);
+    color: #8b949e;
     margin-bottom: 1;
 }
 
@@ -145,15 +127,15 @@ CommandPalette {
     max-width: 80;
     height: auto;
     max-height: 22;
-    background: var(--surface);
-    border: tall var(--border);
+    background: #161b22;
+    border: tall #238636;
     padding: 0;
     margin-bottom: 4;
 }
 
 #palette-header {
-    background: var(--primary) 20%;
-    color: var(--foreground);
+    background: #238636 20%;
+    color: #c9d1d9;
     padding: 0 1;
     height: 1;
     text-style: bold;
@@ -161,7 +143,7 @@ CommandPalette {
 
 #palette-filter {
     height: 3;
-    border: tall var(--border);
+    border: tall #238636;
     margin: 0 1;
     padding: 0;
 }
@@ -179,30 +161,12 @@ CommandPalette {
 
 #palette-footer {
     height: 1;
-    color: var(--muted);
+    color: #8b949e;
     padding: 0 1;
     text-style: italic;
 }
 
 /* Animation utilities for widgets */
 .animate-transition {
-    transition: all 0.2s ease-in-out;
-}
-
-.fade-in {
-    animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-}
-
-.slide-up {
-    animation: slideUp 0.3s ease-out;
-}
-
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to   { opacity: 1; transform: translateY(0); }
+    /* transition: all 0.2s ease-in-out; */
 }

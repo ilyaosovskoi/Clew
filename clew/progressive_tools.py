@@ -131,6 +131,27 @@ def build_select_tools_schema() -> Dict[str, Any]:
     }
 
 
+def build_search_tools_schema() -> Dict[str, Any]:
+    """Build the JSON schema for the search_tools meta-tool."""
+    return {
+        "name": "search_tools",
+        "description": (
+            "Search the tool catalog by keyword. Returns matching tool names "
+            "and their descriptions. Use select_tools to load full definitions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Keyword to search for in tool names and descriptions",
+                }
+            },
+            "required": ["query"],
+        },
+    }
+
+
 # ── Dynamic Tool State ───────────────────────────────────────────────────
 
 # Matches <tools_added> ... </tools_added> and <tools_removed> ... </tools_removed>
@@ -215,7 +236,55 @@ def get_loadable_tools(loaded: Set[str],
     available -= loaded
 
     # Remove always-loaded tools
-    always_loaded = {"select_tools", "call_mcp_tool", "list_mcp_tools"}
+    always_loaded = {"select_tools", "search_tools", "call_mcp_tool", "list_mcp_tools"}
     available -= always_loaded
 
     return sorted(available)
+
+
+def _build_tool_definitions(runtime, tool_names: List[str]) -> str:
+    """Build full tool definitions for the given tool names."""
+    # Get the tool schema from the existing PromptBuilder
+    try:
+        from clew.agent_runtime import PromptBuilder
+        pb = PromptBuilder(runtime)
+        all_tools = pb.build_tool_list()
+        tool_map = {t["name"]: t for t in all_tools}
+
+        parts = []
+        for name in tool_names:
+            schema = tool_map.get(name)
+            if schema:
+                parts.append(f"### {name}\n{json.dumps(schema.get('input_schema', {}), indent=2)}")
+            else:
+                parts.append(f"### {name}\n[Schema not available for this tool]")
+        return "\n\n".join(parts)
+    except Exception as e:
+        return f"[ERROR building definitions: {e}]"
+
+
+def search_tools(query: str) -> str:
+    """Search the tool catalog by keyword and return matching tools with descriptions."""
+    if not query or not isinstance(query, str):
+        return "[SEARCH_TOOLS ERROR] query must be a non-empty string"
+
+    query_lower = query.lower().strip()
+    if not query_lower:
+        return "[SEARCH_TOOLS ERROR] query must be a non-empty string"
+
+    matches = []
+    for name, desc in TOOL_CATALOG.items():
+        if query_lower in name.lower() or query_lower in desc.lower():
+            matches.append((name, desc))
+
+    if not matches:
+        return f"[SEARCH_TOOLS] No tools found matching '{query}'"
+
+    # Sort by name for consistent output
+    matches.sort(key=lambda x: x[0])
+
+    result_lines = [f"[SEARCH_TOOLS] Found {len(matches)} tool(s) matching '{query}':"]
+    for name, desc in matches:
+        result_lines.append(f"  - {name}: {desc}")
+
+    return "\n".join(result_lines)
