@@ -1,0 +1,185 @@
+/* styles_light.tcss - Clew TUI light theme */
+
+/* Define CSS variables on Screen */
+Screen {
+    --background: #ffffff;
+    --surface: #f6f8fa;
+    --primary: #2ea043;
+    --foreground: #24292f;
+    --muted: #656d76;
+    --border: #2ea043;
+    --highlight: #0d1117;
+}
+
+/* Base styles with transitions for smooth animation */
+Screen {
+    background: var(--background);
+    color: var(--foreground);
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* -- Status Bar -- */
+StatusBar {
+    dock: top;
+    height: 3;
+    background: var(--surface);
+    color: var(--foreground);
+    border-bottom: tall var(--border);
+    transition: background 0.3s ease, color 0.3s ease, border-bottom 0.3s ease;
+}
+
+/* -- Chat Log -- */
+ChatLog {
+    height: 1fr;
+    background: var(--background);
+    padding: 1 2;
+    scrollbar-size: 1 1;
+    transition: background 0.3s ease;
+}
+
+ChatLog:focus {
+    scrollbar-color: var(--primary);
+}
+
+/* -- Input Box -- */
+InputBox {
+    dock: bottom;
+    height: 3;
+    border: tall var(--border);
+    margin: 0 2 1 2;
+    background: var(--surface);
+    transition: border 0.3s ease, background 0.3s ease;
+}
+
+InputBox:focus {
+    border: tall var(--primary);
+    background: var(--surface);
+}
+
+InputBox:focus-within {
+    border: tall var(--primary);
+}
+
+/* -- Command Suggestions (inline, above input) -- */
+CommandSuggestions {
+    dock: bottom;
+    height: 0;
+    margin: 0 2 0 2;
+    display: none;
+}
+
+CommandSuggestions.visible {
+    display: block;
+    height: auto;
+}
+
+#suggestions-box {
+    height: auto;
+    max-height: 12;
+    background: var(--surface);
+    border: tall var(--border);
+    padding: 0 1;
+    transition: background 0.3s ease, border 0.3s ease;
+}
+
+#suggestions-box OptionList {
+    height: auto;
+    max-height: 10;
+}
+
+#suggestions-footer {
+    height: 1;
+    color: var(--muted);
+    padding: 0 1;
+    text-style: italic;
+    transition: color 0.3s ease;
+}
+
+/* -- Approval Modal -- */
+ApprovalModal {
+    align: center middle;
+}
+
+#approval-box {
+    width: 70%;
+    max-width: 100;
+    height: auto;
+    padding: 1 2;
+    border: thick #ffa500; /* orange */
+    background: var(--surface);
+    transition: background 0.3s ease, border 0.3s ease;
+}
+
+#approval-title {
+    text-style: bold;
+    color: #ffa500;
+    margin-bottom: 1;
+}
+
+#approval-action {
+    color: var(--foreground);
+}
+
+#approval-summary {
+    color: var(--muted);
+    margin-bottom: 1;
+}
+
+#approval-buttons {
+    height: auto;
+    align: center middle;
+}
+
+#approval-buttons Button {
+    margin: 1 1 0 1;
+    width: 100%;
+}
+
+/* -- Command Palette -- */
+CommandPalette {
+    align: center bottom;
+}
+
+#palette-container {
+    width: 70%;
+    max-width: 80;
+    height: auto;
+    max-height: 22;
+    background: var(--surface);
+    border: tall var(--border);
+    padding: 0;
+    margin-bottom: 4;
+}
+
+#palette-header {
+    background: var(--primary) 20%;
+    color: var(--foreground);
+    padding: 0 1;
+    height: 1;
+    text-style: bold;
+}
+
+#palette-filter {
+    height: 3;
+    border: tall var(--border);
+    margin: 0 1;
+    padding: 0;
+}
+
+#palette-list {
+    height: auto;
+    max-height: 16;
+    margin: 0 1;
+}
+
+#palette-list OptionList {
+    height: auto;
+    max-height: 16;
+}
+
+#palette-footer {
+    height: 1;
+    color: var(--muted);
+    padding: 0 1;
+    text-style: italic;
+}

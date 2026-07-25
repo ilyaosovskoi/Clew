@@ -1,0 +1,49 @@
+# Core runtime dependencies for Clew v2.0.0
+# Install: pip install -r requirements.txt
+# For native acceleration (optional but recommended):
+#   cd clew-native && maturin develop --release
+
+# GUI framework
+PySide6>=6.7.0
+PySide6-Addons>=6.7.0
+
+# macOS-only: needed for the transparent-titlebar native window styling
+# in clew/main_window.py (traffic lights over content, no gray strip,
+# while keeping native rounded corners + drop shadow).
+pyobjc-framework-Cocoa>=10.0; sys_platform == "darwin"
+
+# AI providers (used by clew/providers/*.py)
+anthropic>=0.28.0
+openai>=1.30.0
+groq>=0.9.0
+
+# Utilities
+requests>=2.31.0
+aiohttp>=3.9.0
+pydantic>=2.6.0
+toml>=0.10.2
+pyyaml>=6.0
+pygments>=2.18.0
+rich>=13.7.0
+
+# v2.0: full-screen terminal UI (clew_tui/, `python -m clew_tui`)
+textual>=0.60.0
+
+# v1.2.0: Office Worker section — built-from-scratch Python wrapper
+# over these three well-known libraries. The Office Worker module
+# (clew/office_worker.py) does NOT shell out to any external CLI and
+# does NOT embed third-party agent code; it uses these libraries
+# directly to create/edit .docx / .xlsx / .pptx files.
+python-docx>=1.1.0
+openpyxl>=3.1.0
+python-pptx>=0.6.23
+
+# v2.0: cryptography for EncryptedPromptStore (ChaCha20-Poly1305).
+# Optional — falls back to XOR if not installed (loud warning logged).
+cryptography>=42.0.0
+
+# v2.0: optional Rust native extension (build with maturin, NOT installed via pip):
+#   cd clew-native && maturin develop --release
+# This builds and installs the `clew_native` Python extension from the Rust
+# sources in clew-native/. Without it, pure-Python fallbacks are used
+# (slower but functional).

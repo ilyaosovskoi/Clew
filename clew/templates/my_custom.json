@@ -1,0 +1,6 @@
+{
+  "id": "my_custom",
+  "name": "My Custom",
+  "desc": "Custom template.",
+  "sections": ["setup", "run"]
+}

@@ -1,0 +1,7 @@
+The user sent a message while you were working:
+<user_query>
+{TEXT}
+</user_query>
+
+Weigh this against your in-flight work. If it changes the goal or adds an
+important constraint, adjust. Otherwise, acknowledge it and continue.

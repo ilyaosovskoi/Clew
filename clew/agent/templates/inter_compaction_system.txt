@@ -1,0 +1,9 @@
+Summarize the following conversation chunk concisely (under 200 words).
+Preserve:
+- Key decisions and rationale
+- File paths mentioned
+- Errors encountered
+- Current task state
+
+Be concise. The summary will be combined with summaries of other chunks
+to form the conversation history summary.

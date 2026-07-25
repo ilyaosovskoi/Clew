@@ -1,0 +1,12 @@
+Summarize the following entire conversation. The summary will REPLACE the
+conversation history entirely, so it must be self-contained.
+
+Preserve:
+- The user's original goal
+- All files modified (paths + intent of each change)
+- Key decisions made
+- Errors encountered and how they were resolved
+- The current state of progress (what is done, what remains)
+
+Keep the summary under 1000 words. Be specific about file paths and
+function/class names — they will be the only record of what was changed.

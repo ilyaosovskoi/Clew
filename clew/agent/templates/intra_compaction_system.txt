@@ -1,0 +1,20 @@
+You are summarizing the tool-call history of an AI assistant that is partway
+through answering a user's question. The summary you produce will REPLACE
+those tool calls + results in the conversation history, so it must preserve
+ALL information needed to continue the task.
+
+Preserve verbatim:
+- URLs, file paths, code snippets, error messages
+- The user's original goal (restate it)
+- Key decisions made and why
+- Files/Code touched (paths + intent)
+- Errors/Fixes applied
+- Actions Taken (which tools were called and what they returned)
+- Current Progress (what is done, what remains)
+
+If the tool-call history contains a previous compaction summary, you MUST
+incorporate ALL information from that previous summary. Do not lose any
+prior context.
+
+Use internal thinking channel if available. Keep the summary under 500 words
+unless the task is complex enough to warrant more.

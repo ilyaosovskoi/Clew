@@ -1,0 +1,130 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clew"
+version = "2.0.0"
+description = """\
+Clew v2.0.0 — Native, local-first AI IDE with multi-provider support, MCP,
+multi-agent Heavy Code mode, Office Worker section, headless CLI, optional
+Rust native acceleration (sandbox / circuit breaker / compaction / interjection),
+and v2 agent runtime (asyncio ChatStateActor + three-tier compaction + sub-agent
+v2 with toolset-level read-only guarantee)."""
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Clew Contributors" }
+]
+keywords = [
+    "ai", "ide", "agent", "llm", "clew",
+    "macos", "apple-silicon",
+    "rust", "pyo3", "sandbox", "landlock",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: IDEs",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: MacOS X",
+    "Environment :: X11 Applications :: Qt",
+]
+requires-python = ">=3.11"
+
+dependencies = [
+    # Core UI — Qt hosts the HTML frontend via QWebEngineView.
+    "PySide6>=6.6.0",
+    "PySide6-Addons>=6.6.0",
+    # Utils
+    "pydantic>=2.7.0",
+    "toml>=0.10.2",
+    "pyyaml>=6.0",
+    "pygments>=2.18.0",
+    "rich>=13.7.0",
+    # Office Worker section — built-from-scratch Python wrapper over docx/xlsx/pptx
+    "python-docx>=1.1.0",
+    "openpyxl>=3.1.0",
+    "python-pptx>=0.6.23",
+    # v2.0: cryptography for EncryptedPromptStore (ChaCha20-Poly1305).
+    # Optional — falls back to XOR if not installed (loud warning logged).
+    "cryptography>=42.0.0",
+]
+
+[project.optional-dependencies]
+macos = [
+    # Needed for the transparent-titlebar native window styling.
+    "pyobjc-framework-Cocoa>=10.0",
+]
+# v2.0: optional Rust native acceleration. When installed (via maturin),
+# `clew_native` extension is available and used automatically by
+# `clew.agent.native`. Without it, pure-Python fallbacks are used.
+native = [
+    # Built and installed via maturin from clew-native/pyo3/.
+    # We don't ship a wheel here — users build it themselves:
+    #   cd clew-native && maturin develop --release
+    # (Listing maturin as a dev dependency instead.)
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-qt>=4.2",
+    "black>=24.0",
+    "mypy>=1.10",
+    "py2app>=0.28",   # for .dmg builds on macOS
+    # v2.0: for building the Rust native extension.
+    "maturin>=1.7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/zai-shop/clew"
+Repository = "https://github.com/zai-shop/clew"
+Issues = "https://github.com/zai-shop/clew/issues"
+Documentation = "https://github.com/zai-shop/clew#readme"
+
+[project.scripts]
+clew = "clew.__main__:main"
+clew-gui = "clew.__main__:main"
+clew_gui = "clew.__main__:main"
+clew_tui = "clew_tui.__main__:main"
+# Headless CLI
+clew-cli = "clew.cli:main"
+# v2.0: ACP server entry point (for IDE integration via Agent Client Protocol).
+clew-acp = "clew.agent.acp_server:cli_main"
+
+[tool.setuptools.packages.find]
+include = ["clew*"]
+
+[tool.setuptools.package-data]
+clew = [
+    "assets/*", "assets/**/*",
+    "web/*", "web/**/*",
+    "skills/*", "skills/**/*",
+    "agent/templates/*",
+]
+
+# ── py2app configuration for .dmg builds ────────────────────────────────
+[tool.py2app]
+app = ["clew/__main__.py"]
+iconfile = "assets/logo.icns"
+bundle-identifier = "io.clew.app"
+name = "Clew"
+version = "2.0.0"
+# py2app tends to over-package. These excludes drop ~600 MB of unused deps.
+excludes = [
+    "tkinter", "test", "tests", "unittest",
+    "PyQt5", "PyQt6", "PySide2",
+    "matplotlib", "numpy.testing",
+    "IPython", "notebook", "jupyter",
+]
+includes = [
+    "PySide6", "shiboken6",
+]
+resources = ["assets", "clew/web"]
+plist-file = "Info.plist"
