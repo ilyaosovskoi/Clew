@@ -296,3 +296,17 @@ Per-provider `RequestQueue` with:
 
 `QueueRegistry` is a singleton keyed by `provider_id`, so each
 provider gets its own queue.
+
+## Refactoring Fix (2025-07-26)
+
+Fixed the `clew/agent_runtime/` and `clew/web_bridge/` package split that was introduced in the v2.0.0 refactoring but had import bugs:
+
+**Problem:** The refactored `diff_utils.py` module-level functions had `@staticmethod` decorators and `self` parameters incorrectly (they were module-level, not class methods). The `ToolEngine` in `tool_engine/_engine.py` still called `self._backup_file(p)` which no longer existed.
+
+**Fixes applied:**
+1. `clew/agent_runtime/diff_utils.py` — rewritten as proper module-level functions (removed `@staticmethod`, fixed `_backup_file` signature from `(self, p)` to `(backup_dir, max_backups, p)`)
+2. `clew/agent_runtime/tool_engine/_engine.py` — updated all 7 call sites from `self._backup_file(p)` to `_backup_file_func(self._backup_dir, self._MAX_BACKUPS, p)`
+3. `clew/agent_runtime/parser.py` — added missing `Callable` import and `AgentEvent` from `.types`
+4. `clew/agent_runtime/runtime.py` — added missing imports: `ProviderRegistry`, `get_project_context`, `get_context_manager`, `EventCallback` type alias, `Tuple`
+
+All 144 tests now pass and all imports work correctly.
