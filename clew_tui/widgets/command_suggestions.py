@@ -183,7 +183,7 @@ class CommandSuggestions(Widget):
             display = f"{prefix}{item.label}  [dim]-[/dim]  {item.description}"
             list_w.add_option(display)
         if 0 <= self._highlighted < list_w.option_count:
-            list_w.highlight = self._highlighted
+            list_w.highlighted = self._highlighted
 
     def on_option_list_selected(self, event: OptionList.Selected) -> None:
         """Handle mouse click on a suggestion item."""

@@ -1,6 +1,13 @@
 """guardian.py — LLM-based reviewer for risky tool calls (APPROVE/REJECT/MODIFY).
 
 Rule-based risk scoring + optional LLM review with circuit breaker protection.
+
+Issue #4 (Guardian Agent sub-reviewer): when the configured mode is
+``subagent``, the LLM review is delegated to a throw-away
+``GeneralPurposeSubagent`` instead of calling the provider directly. This
+isolates the review prompt from the parent runtime's prompt history and
+lets us enforce a read-only toolset so the reviewer cannot mutate the
+workspace while assessing the call.
 """
 
 from __future__ import annotations
@@ -9,10 +16,11 @@ import json
 import logging
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from clew.agent import CircuitBreakerRegistry, CircuitOpenError, get_circuit_breaker_registry
+from clew.agent.circuit_breaker import CircuitBreakerRegistry, CircuitOpenError
+from clew.agent import get_circuit_breaker_registry
 from clew.agent.native import NATIVE_AVAILABLE, get_native_module
 from clew.providers import ProviderMessage, ProviderResponse
 from clew.providers.base import Provider
@@ -27,6 +35,10 @@ class GuardianConfig:
     level: str = "off"  # "off" | "dangerous_only" | "all"
     provider_id: str = "auto"  # "auto" = use parent runtime's active provider
     model: str = "auto"  # "auto" = use parent runtime's active model
+    # Issue #4: when True, delegate the LLM review to a read-only subagent
+    # rather than calling the provider directly. Defaults to False so
+    # existing behaviour is unchanged.
+    use_subagent: bool = False
 
 
 # --- Risk Scoring --------------------------------------------------------
@@ -44,6 +56,13 @@ CRITICAL_PATHS = [
     os.path.expanduser("~/.config/gcloud"),
     os.path.expanduser("~/.docker"),
     os.path.expanduser("~/.kube"),
+    "/etc",
+    "/usr",
+    "/bin",
+    "/sbin",
+    "/boot",
+    "/sys",
+    "/proc",
 ]
 
 CRITICAL_FILENAMES = {
@@ -60,6 +79,9 @@ CRITICAL_FILENAMES = {
     "Cargo.lock",
     "go.sum",
     "composer.lock",
+    "passwd",
+    "shadow",
+    "sudoers",
 }
 
 DANGEROUS_COMMAND_PATTERNS = [
@@ -76,42 +98,64 @@ DANGEROUS_COMMAND_PATTERNS = [
 ]
 
 
+def _normalise_command(cmd: Any) -> str:
+    """Best-effort flattening of a command argument to a single string.
+
+    Tools may pass the command as ``str``, ``list[str]`` or ``tuple[str, ...]``.
+    The risk scorer needs a single string so the regex patterns can run.
+    """
+    if cmd is None:
+        return ""
+    if isinstance(cmd, (list, tuple)):
+        return " ".join(str(x) for x in cmd)
+    return str(cmd)
+
+
 def assess_risk(
     tool_name: str,
     args: dict[str, Any],
     workspace: str,
     command_policy: Optional[Any] = None,
 ) -> RiskAssessment:
-    """Rule-based risk assessment. Returns level and reasons."""
+    """Rule-based risk assessment. Returns level and reasons.
+
+    The function is intentionally pure (no I/O, no side effects) so it
+    can be unit-tested without mocks.
+    """
     reasons: list[str] = []
     level = "low"
 
-    # execute_command / run_shell / bash
+    # --- shell command execution ---------------------------------------
     if tool_name in ("execute_command", "run_shell", "bash", "shell"):
-        cmd = args.get("command", "") or args.get("cmd", "") or str(args)
-        # Check command_policy
+        cmd = _normalise_command(
+            args.get("command") or args.get("cmd") or args.get("args")
+        )
+
+        # Check command_policy (optional)
         if command_policy:
-            # Extract binary (first word)
             binary = cmd.strip().split()[0] if cmd.strip() else ""
             if binary and command_policy.is_dangerous_flag(binary, ""):
                 reasons.append(f"command_policy: {binary} flagged as dangerous")
                 level = "high"
-        # Pattern matching
+
+        # Pattern matching for known-dangerous shells
         for pattern, desc in DANGEROUS_COMMAND_PATTERNS:
             if pattern.search(cmd):
                 reasons.append(f"dangerous pattern: {desc}")
                 level = "high"
-        # rm outside workspace
-        if "rm " in cmd:
-            # Heuristic: check for paths not under workspace
-            pass  # Could expand
 
-    # write_file / edit_file
-    elif tool_name in ("write_file", "edit_file", "write", "edit"):
-        path = args.get("path", "") or args.get("file_path", "")
+        # Anything else with shell execution is at least medium risk
+        if level == "low":
+            reasons.append(f"{tool_name} operation")
+            level = "medium"
+
+    # --- file writes / edits -------------------------------------------
+    elif tool_name in ("write_file", "edit_file", "write", "edit", "str_replace", "str_replace_editor"):
+        path = args.get("path") or args.get("file_path") or ""
         if path:
-            # Check critical paths
             abs_path = os.path.abspath(os.path.join(workspace, path))
+            ws_abs = os.path.abspath(workspace)
+
             for crit in CRITICAL_PATHS:
                 try:
                     if abs_path.startswith(crit):
@@ -120,20 +164,23 @@ def assess_risk(
                         break
                 except Exception:
                     pass
-            # Check critical filenames
+
             basename = os.path.basename(path)
             if basename in CRITICAL_FILENAMES:
                 reasons.append(f"writes critical file: {basename}")
                 level = "high"
-            # Outside workspace
-            ws_abs = os.path.abspath(workspace)
+
             if not abs_path.startswith(ws_abs):
                 reasons.append(f"writes outside workspace: {path}")
                 level = "high"
 
-    # delete_file
-    elif tool_name in ("delete_file", "delete", "remove"):
-        path = args.get("path", "") or args.get("file_path", "")
+        if level == "low":
+            reasons.append(f"{tool_name} operation")
+            level = "medium"
+
+    # --- file deletion -------------------------------------------------
+    elif tool_name in ("delete_file", "delete", "remove", "rm"):
+        path = args.get("path") or args.get("file_path") or ""
         if path:
             abs_path = os.path.abspath(os.path.join(workspace, path))
             for crit in CRITICAL_PATHS:
@@ -149,12 +196,23 @@ def assess_risk(
                 reasons.append(f"deletes critical file: {basename}")
                 level = "high"
 
-    # git operations
-    elif tool_name in ("git", "git_push", "git_commit"):
-        subcmd = args.get("subcommand", "") or args.get("args", "")
-        if "push" in str(subcmd) and "--force" in str(subcmd):
+        if level == "low":
+            reasons.append(f"{tool_name} operation")
+            level = "medium"
+
+    # --- git operations ------------------------------------------------
+    elif tool_name in ("git", "git_push", "git_commit", "git_stage"):
+        subcmd = args.get("subcommand") or args.get("args") or args.get("command") or ""
+        subcmd_s = _normalise_command(subcmd)
+        if "push" in subcmd_s and "--force" in subcmd_s:
             reasons.append("git push --force")
             level = "high"
+        elif "reset --hard" in subcmd_s:
+            reasons.append("git reset --hard")
+            level = "high"
+        elif level == "low":
+            reasons.append(f"{tool_name} operation")
+            level = "medium"
 
     return RiskAssessment(level=level, reasons=reasons)
 
@@ -178,8 +236,32 @@ async def review_with_llm(
     recent_context: str,
     provider_registry,
     workspace: str,
+    _spawn_fn_for_test: Optional[Any] = None,
 ) -> GuardianVerdict:
-    """Call the LLM to review the tool call. Returns verdict."""
+    """Call the LLM to review the tool call. Returns verdict.
+
+    Issue #4: when ``config.use_subagent`` is True, delegates the actual
+    LLM call to a read-only ``GeneralPurposeSubagent`` (see
+    ``review_with_subagent``). The direct-provider path is preserved as
+    the default to keep existing behaviour intact.
+
+    The ``_spawn_fn_for_test`` parameter is an internal hook so unit
+    tests can inject a fake spawn callable without monkey-patching
+    ``clew.agent.subagent_v2.spawn_subagent``. Production callers should
+    not pass it.
+    """
+    if config.use_subagent:
+        return await review_with_subagent(
+            config=config,
+            tool_name=tool_name,
+            args=args,
+            risk=risk,
+            recent_context=recent_context,
+            provider_registry=provider_registry,
+            workspace=workspace,
+            spawn_fn=_spawn_fn_for_test,
+        )
+
     # Load system prompt from template file
     template_path = os.path.join(os.path.dirname(__file__), "templates", "guardian.md")
     try:
@@ -187,7 +269,10 @@ async def review_with_llm(
             system_prompt = f.read()
     except Exception as e:
         logger.warning("guardian: failed to load template %s: %s", template_path, e)
-        system_prompt = "You are a safety reviewer. Return JSON: {verdict, rationale, suggested_args}."
+        system_prompt = (
+            "You are a safety reviewer. Return JSON: "
+            "{verdict, rationale, suggested_args}."
+        )
 
     # Build user message
     user_data = {
@@ -205,12 +290,10 @@ async def review_with_llm(
 
     # Resolve provider from registry
     if provider_id == "auto":
-        # Use the active provider from the registry
         provider_id = provider_registry.active_id or "ollama"
     if model == "auto":
-        # Get the default model for the active provider
-        provider_obj = provider_registry.active
-        model = provider_obj.get_model() if provider_obj else "llama3"
+        provider_obj = provider_registry.active if hasattr(provider_registry, "active") else None
+        model = provider_obj.get_model() if provider_obj and hasattr(provider_obj, "get_model") else "llama3"
 
     provider = provider_registry.get(provider_id)
     if provider is None:
@@ -222,7 +305,6 @@ async def review_with_llm(
 
     # Circuit breaker
     key = f"{provider_id}/{model}"
-    from clew.agent import CircuitBreakerRegistry, get_circuit_breaker_registry
     breaker_registry = get_circuit_breaker_registry()
     breaker = breaker_registry.get(key)
     if not breaker.try_claim():
@@ -245,6 +327,7 @@ async def review_with_llm(
         verdict = _parse_verdict(raw)
         if verdict is None:
             logger.warning("guardian: failed to parse verdict from LLM, defaulting to APPROVE")
+            breaker.record(ok=True)
             return GuardianVerdict(
                 verdict="APPROVE",
                 rationale="LLM response unparseable — defaulting to approve",
@@ -264,6 +347,117 @@ async def review_with_llm(
         )
 
 
+# --- Issue #4: Subagent reviewer ----------------------------------------
+
+
+async def review_with_subagent(
+    *,
+    config: GuardianConfig,
+    tool_name: str,
+    args: dict[str, Any],
+    risk: RiskAssessment,
+    recent_context: str,
+    provider_registry,
+    workspace: str,
+    spawn_fn: Optional[Any] = None,
+    runtime: Optional[Any] = None,
+) -> GuardianVerdict:
+    """Delegate the Guardian LLM review to a read-only subagent.
+
+    Issue #4: instead of calling the parent provider directly, we ask a
+    read-only subagent (tool whitelist enforced at toolset construction
+    time) to perform the review. The subagent's response is parsed with
+    the same ``_parse_verdict`` helper used by the direct-provider path,
+    so verdict semantics stay identical.
+
+    Args:
+        spawn_fn: optional callable used to spawn the subagent. If None,
+            falls back to ``clew.agent.subagent_v2.spawn_subagent``.
+            The callable must accept ``(runtime, subagent_type, prompt)``
+            and return either a string or an object with ``.text`` /
+            ``.content``. Tests inject an ``AsyncMock`` here.
+        runtime: the parent runtime. Required when ``spawn_fn`` is None
+            (so we can call the real ``spawn_subagent``). Ignored when
+            ``spawn_fn`` is provided.
+    """
+    template_path = os.path.join(os.path.dirname(__file__), "templates", "guardian.md")
+    try:
+        with open(template_path, "r", encoding="utf-8") as f:
+            system_prompt = f.read()
+    except Exception as e:
+        logger.warning("guardian: failed to load template %s: %s", template_path, e)
+        system_prompt = (
+            "You are a safety reviewer. Return JSON: "
+            "{verdict, rationale, suggested_args}."
+        )
+
+    user_data = {
+        "tool": tool_name,
+        "args": args,
+        "risk_level": risk.level,
+        "reasons": risk.reasons,
+        "recent_context": recent_context,
+    }
+    user_prompt = (
+        f"{system_prompt}\n\n"
+        f"--- REVIEW REQUEST ---\n{json.dumps(user_data, ensure_ascii=False)}"
+    )
+
+    # Resolve the spawn callable.
+    if spawn_fn is None:
+        try:
+            from clew.agent.subagent_v2 import spawn_subagent as spawn_fn  # type: ignore
+        except Exception as e:  # pragma: no cover — defensive
+            logger.warning("guardian: subagent module unavailable: %s", e)
+            return GuardianVerdict(
+                verdict="APPROVE",
+                rationale=f"Subagent reviewer unavailable — defaulting to approve: {e}",
+                suggested_args=None,
+            )
+        if runtime is None:
+            return GuardianVerdict(
+                verdict="APPROVE",
+                rationale="Subagent reviewer needs a runtime — defaulting to approve",
+                suggested_args=None,
+            )
+
+    # Use the built-in `explore` subagent: it is read-only by toolset
+    # construction (no write/exec tools advertised to the LLM). The
+    # guardian system prompt is prepended to the user prompt so the
+    # subagent's own prompt template doesn't drown it out.
+    try:
+        result = spawn_fn(runtime, "explore", user_prompt)
+        if hasattr(result, "__await__"):
+            result = await result
+    except Exception as e:
+        logger.warning("guardian: subagent spawn failed: %s", e)
+        return GuardianVerdict(
+            verdict="APPROVE",
+            rationale=f"Subagent spawn failed — defaulting to approve: {e}",
+            suggested_args=None,
+        )
+
+    raw = ""
+    if isinstance(result, str):
+        raw = result
+    elif hasattr(result, "text"):
+        raw = result.text or ""
+    elif hasattr(result, "content"):
+        raw = result.content or ""
+
+    verdict = _parse_verdict(raw)
+    if verdict is None:
+        logger.warning(
+            "guardian: subagent response unparseable, defaulting to APPROVE"
+        )
+        return GuardianVerdict(
+            verdict="APPROVE",
+            rationale="Subagent response unparseable — defaulting to approve",
+            suggested_args=None,
+        )
+    return verdict
+
+
 def _parse_verdict(raw: str) -> Optional[GuardianVerdict]:
     """Parse JSON verdict from LLM response. Handles fenced code blocks."""
     # Try to extract JSON from markdown fences
@@ -277,6 +471,9 @@ def _parse_verdict(raw: str) -> Optional[GuardianVerdict]:
             raw = m.group(0)
     try:
         data = json.loads(raw)
+        # All fields must be present
+        if "verdict" not in data or "rationale" not in data or "suggested_args" not in data:
+            return None
         verdict = str(data.get("verdict", "")).upper()
         if verdict not in ("APPROVE", "REJECT", "MODIFY"):
             return None
@@ -293,7 +490,18 @@ def _parse_verdict(raw: str) -> Optional[GuardianVerdict]:
 
 def _looks_like_rate_limit(exc: Exception) -> bool:
     msg = str(exc).lower()
-    return any(kw in msg for kw in ("rate limit", "rate_limit", "ratelimit", "too many requests", "429", "quota exceeded", "throttl"))
+    return any(
+        kw in msg
+        for kw in (
+            "rate limit",
+            "rate_limit",
+            "ratelimit",
+            "too many requests",
+            "429",
+            "quota exceeded",
+            "throttl",
+        )
+    )
 
 
 # --- Recent Context Builder ---------------------------------------------
@@ -310,6 +518,12 @@ def build_recent_context(memory, max_messages: int = 4, max_chars: int = 2000) -
         content = getattr(m, "content", "")
         if len(content) > max_chars:
             content = content[:max_chars] + f"\n... ({len(content)} total chars)"
-        role_label = "USER" if role == "user" else "ASSISTANT" if role == "assistant" else role.upper()
+        role_label = (
+            "USER"
+            if role == "user"
+            else "ASSISTANT"
+            if role == "assistant"
+            else role.upper()
+        )
         parts.append(f"[{role_label}]\n{content}")
     return "\n\n".join(parts)

@@ -122,6 +122,16 @@ class ClewBridge:
         agent.set_confirm_callback(self._on_confirm_request)
         agent.set_cancel_check(lambda: self._stop.is_set())
         self._agent = agent
+
+        # v2.0.0 fix: restore the saved Guardian level so the user does
+        # not start every session with Guardian silently OFF.
+        try:
+            saved_level = self._load_guardian_config()
+            if saved_level and saved_level != "off":
+                self.set_guardian_level(saved_level)
+        except Exception:
+            pass
+
         return agent
 
     def _init_slash_manager(self) -> None:
@@ -193,33 +203,6 @@ class ClewBridge:
         try:
             agent.tools._confirm_accepted = bool(accepted)
             agent.tools._confirm_event.set()
-        except Exception:
-            pass
-
-    def answer_guardian(self, response: str) -> None:
-        """Called by the UI after the user answers a Guardian modal.
-
-        response: "approve", "reject", or "use_fix"
-        """
-        agent = self._agent
-        if agent is None:
-            return
-        try:
-            if response == "use_fix":
-                # Apply the pending fixed args
-                if hasattr(agent.tools, "_guardian_pending_args") and agent.tools._guardian_pending_args:
-                    agent.tools._confirm_accepted = True
-                    agent.tools._confirm_event.set()
-                else:
-                    # No fix available, treat as approve
-                    agent.tools._confirm_accepted = True
-                    agent.tools._confirm_event.set()
-            elif response == "reject":
-                agent.tools._confirm_accepted = False
-                agent.tools._confirm_event.set()
-            else:  # "approve"
-                agent.tools._confirm_accepted = True
-                agent.tools._confirm_event.set()
         except Exception:
             pass
 
@@ -557,3 +540,149 @@ class ClewBridge:
     def get_usage(self) -> Dict[str, Any]:
         """Return current session usage stats."""
         return self.status()
+
+    # ── v2.0.0 — Collaboration modes ───────────────────────────────
+
+    def list_collaboration_modes(self) -> List[Dict[str, Any]]:
+        """Return the four collaboration modes supported by the backend."""
+        return [
+            {"id": "single", "label": "Single (no collaboration)",
+             "desc": "Run a single agent on the task."},
+            {"id": "reviewer", "label": "Reviewer",
+             "desc": "Implementer + reviewer loop with APPROVE/REJECT/MODIFY verdicts."},
+            {"id": "codegen", "label": "Codegen",
+             "desc": "Planner decomposes task, N parallel implementers, concatenated output."},
+            {"id": "pair", "label": "Pair",
+             "desc": "Two pair-programmer agents alternate turns on the same task."},
+            {"id": "observer", "label": "Observer",
+             "desc": "One worker + N read-only observers; warnings collected."},
+        ]
+
+    def run_collaboration(self, mode: str, task: str) -> Dict[str, Any]:
+        """Run a task in the given collaboration mode.
+
+        Returns {ok, mode, output, iterations, metadata} on success.
+        """
+        try:
+            from clew.collaboration import (
+                CollaborationOrchestrator, CollaborationMode,
+            )
+            agent = self.ensure_agent()
+            orch = CollaborationOrchestrator(agent)
+            try:
+                mode_enum = CollaborationMode(mode)
+            except ValueError:
+                return {"ok": False, "error": f"Unknown mode: {mode}"}
+            result = orch.run(mode_enum, task)
+            return {
+                "ok": True,
+                "mode": mode,
+                "output": result.output,
+                "iterations": result.iterations,
+                "metadata": result.metadata or {},
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.0.0 — Request queue monitoring ──────────────────────────
+
+    def get_queue_stats(self) -> Dict[str, Any]:
+        """Return per-provider request-queue stats."""
+        try:
+            from clew.request_queue import get_queue_registry
+            return get_queue_registry().stats()
+        except Exception:
+            return {}
+
+    # ── v2.0.0 — Persistence backend selector ──────────────────────
+
+    def get_persistence_backend(self) -> str:
+        """Return the configured chat-persistence backend ('json' or 'sqlite')."""
+        cfg_path = Path.home() / ".clew" / "config.json"
+        try:
+            if cfg_path.exists():
+                with open(cfg_path, "r") as f:
+                    cfg = json.load(f) or {}
+                return cfg.get("persistence_backend", "json")
+        except Exception:
+            pass
+        return "json"
+
+    def set_persistence_backend(self, backend: str) -> Dict[str, Any]:
+        """Switch chat persistence between 'json' and 'sqlite'."""
+        valid = {"json", "sqlite"}
+        if backend not in valid:
+            return {"ok": False, "error": f"Invalid backend: {backend}"}
+        try:
+            cfg_path = Path.home() / ".clew" / "config.json"
+            cfg_path.parent.mkdir(parents=True, exist_ok=True)
+            cfg: dict = {}
+            if cfg_path.exists():
+                with open(cfg_path, "r") as f:
+                    cfg = json.load(f) or {}
+            cfg["persistence_backend"] = backend
+            with open(cfg_path, "w") as f:
+                json.dump(cfg, f, indent=2)
+            return {"ok": True, "backend": backend}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def list_sqlite_sessions(self) -> List[Dict[str, Any]]:
+        """List sessions stored in the SQLite backend (~/.clew/chats.sqlite3)."""
+        try:
+            from clew.session.sqlite_persistence import SQLitePersistence
+            db_path = Path.home() / ".clew" / "chats.sqlite3"
+            if not db_path.exists():
+                return []
+            store = SQLitePersistence(str(db_path))
+            return store.list_sessions()
+        except Exception:
+            return []
+
+    # ── v2.0.0 — Context fragments / compaction view ───────────────
+
+    def get_compaction_stats(self) -> Optional[Dict[str, Any]]:
+        """Return compaction stats from the most recent compaction pass."""
+        try:
+            agent = self._agent
+            if agent is None:
+                return None
+            stats = getattr(agent, "_last_compaction_stats", None)
+            if stats is None:
+                return None
+            if hasattr(stats, "to_dict"):
+                return stats.to_dict()
+            return dict(stats)
+        except Exception:
+            return None
+
+    # ── v2.0.0 — Progressive tools catalog ─────────────────────────
+
+    def get_tool_catalog_state(self) -> Dict[str, Any]:
+        """Return the current progressive-tools catalog state."""
+        try:
+            from clew.progressive_tools import TOOL_CATALOG
+            agent = self._agent
+            if agent is None:
+                return {"loaded": [], "available": list(TOOL_CATALOG.keys()),
+                        "prompt_chars_saved": 0}
+            engine = getattr(agent, "tools", None)
+            try:
+                loaded = sorted({str(t) for t in engine._tools.keys()})
+            except Exception:
+                loaded = []
+            available = sorted(
+                name for name in TOOL_CATALOG.keys() if name not in loaded
+            )
+            prompt_chars_saved = sum(
+                len(name) + len(TOOL_CATALOG.get(name, ""))
+                for name in available
+            )
+            return {
+                "loaded": loaded,
+                "available": available,
+                "prompt_chars_saved": prompt_chars_saved,
+            }
+        except Exception as e:
+            return {"loaded": [], "available": [], "prompt_chars_saved": 0,
+                    "error": str(e)}

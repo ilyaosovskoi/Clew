@@ -47,6 +47,20 @@ BUILTIN_COMMANDS: List[CommandEntry] = [
     CommandEntry("help", "/help", "Show available slash commands", "info", False),
     CommandEntry("planning", "/planning", "Toggle planning mode on/off", "toggle", False),
     CommandEntry("gui", "/gui", "Launch the Clew GUI window (Ctrl+G)", "action", False),
+    # v2.0.0 — Guardian level control
+    CommandEntry("guardian", "/guardian", "Set Guardian safety level (off/dangerous_only/all)", "toggle", True),
+    # v2.0.0 — Collaboration modes
+    CommandEntry("collab", "/collab", "Run a collaboration-mode task (Reviewer/Codegen/Pair/Observer)", "action", True),
+    # v2.0.0 — Request queue monitoring
+    CommandEntry("queue", "/queue", "Show request queue stats (cooldown, retries, in-flight)", "info", False),
+    # v2.0.0 — Persistence backend selector
+    CommandEntry("storage", "/storage", "Choose chat storage backend (JSON/SQLite)", "toggle", True),
+    # v2.0.0 — SQLite sessions browser
+    CommandEntry("sessions", "/sessions", "List SQLite-stored chat sessions", "info", False),
+    # v2.0.0 — Context fragments / compaction view
+    CommandEntry("context", "/context", "View context fragments & compaction stats", "info", False),
+    # v2.0.0 — Progressive tools catalog
+    CommandEntry("tools", "/tools", "Browse loaded & available progressive tools", "info", False),
 ]
 
 
@@ -164,7 +178,7 @@ class CommandPalette(ModalScreen):
                 self._option_ids.append(opt_id)
                 list_widget.add_option(f"{label}  -  {desc}")
             if list_widget.option_count > 0:
-                list_widget.highlight = 0
+                list_widget.highlighted = 0
             return
 
         self._all_commands = list(BUILTIN_COMMANDS) + list(self._custom_commands)
@@ -197,7 +211,7 @@ class CommandPalette(ModalScreen):
                 list_widget.add_option(f"{cmd.label}  -  {cmd.description}")
 
         if first_real_index < list_widget.option_count:
-            list_widget.highlight = first_real_index
+            list_widget.highlighted = first_real_index
 
     def on_input_changed(self, event: Input.Changed) -> None:
         try:
@@ -223,7 +237,7 @@ class CommandPalette(ModalScreen):
                         f"{opt.get('label', '')}  -  {opt.get('desc', '')}"
                     )
             if list_widget.option_count > 0:
-                list_widget.highlight = 0
+                list_widget.highlighted = 0
             return
 
         list_widget = self.query_one("#palette-list", OptionList)
@@ -267,7 +281,7 @@ class CommandPalette(ModalScreen):
                 list_widget.add_option(f"{cmd.label}  -  {cmd.description}")
 
         if first_real_index < list_widget.option_count:
-            list_widget.highlight = first_real_index
+            list_widget.highlighted = first_real_index
 
     def on_option_list_selected(self, event: OptionList.Selected) -> None:
         """Handle mouse click on an option."""
@@ -307,7 +321,7 @@ class CommandPalette(ModalScreen):
         try:
             current = list_widget.highlighted
             if current is not None and current > 0:
-                list_widget.highlight = current - 1
+                list_widget.highlighted = current - 1
         except Exception:
             pass
 
@@ -317,7 +331,7 @@ class CommandPalette(ModalScreen):
             current = list_widget.highlighted
             count = list_widget.option_count
             if current is not None and current < count - 1:
-                list_widget.highlight = current + 1
+                list_widget.highlighted = current + 1
         except Exception:
             pass
 

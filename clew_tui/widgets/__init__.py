@@ -1,6 +1,6 @@
 """Widgets for the Clew TUI."""
 
-from .approval_modal import ApprovalModal
+from .approval_modal import ApprovalModal, GuardianModal
 from .chat_log import ChatLog
 from .command_palette import CommandPalette
 from .command_suggestions import CommandSuggestions
@@ -12,6 +12,7 @@ __all__ = [
     "ChatLog",
     "CommandPalette",
     "CommandSuggestions",
+    "GuardianModal",
     "InputBox",
     "StatusBar",
 ]

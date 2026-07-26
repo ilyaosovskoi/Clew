@@ -160,17 +160,17 @@ Added `search_tools` meta-tool that allows LLM to search TOOL_CATALOG by keyword
 Priority-ordered objectives for the `feature/v2.0.0-version` branch:
 
 ### 1. Smoke test the TUI
-Run `clew_tui`, test all features end-to-end, document all crashes, freezes, or misbehavior in GitHub Issues.
+Run `clew_tui`, test all features end-to-end, document all crashes, freezes, or misbehavior in GitHub Issues. — **DONE (2025-07-25)**
 
 ### 2. Fix TUI issues + close open Issues
 Work through GitHub Issues #3–#9 to bring Clew's agent quality to parity with Codex/Claude Code:
-- Guardian tests (#3)
-- Guardian Agent sub-reviewer (#4)
-- Marker-based context fragments for compaction (#5)
-- SQLite persistence (#6)
-- Collaboration modes (#7)
-- Tool search meta-tool (#8)
-- Request serialization queues (#9)
+- Guardian tests (#3) — **DONE** (43 tests in `clew/agent/test_guardian.py`)
+- Guardian Agent sub-reviewer (#4) — **DONE** (`review_with_subagent` in `clew/agent/guardian.py`)
+- Marker-based context fragments for compaction (#5) — **DONE** (`clew/agent/context_fragments.py` + tests)
+- SQLite persistence (#6) — **DONE** (`clew/session/sqlite_persistence.py` + tests; `ContextMemory.save`/`load` dispatch to it on `*.db` paths)
+- Collaboration modes (#7) — **DONE** (`clew/collaboration.py` with Reviewer / Codegen / Pair / Observer modes + tests)
+- Tool search meta-tool (#8) — **DONE** (see section above)
+- Request serialization queues (#9) — **DONE** (`clew/request_queue.py` with `RequestQueue`, `QueueRegistry`, `wrap_provider` + tests)
 
 ### 3. User-custom providers
 Add a mechanism for users to register their own AI provider without modifying source code. Should support:
@@ -215,3 +215,84 @@ Redesign AutoRouter to automatically manage provider/model selection based on bu
 - Model tier catalog expanded with per-provider pricing, speed, context window
 - Evaluator prompt in `clew/agent/templates/` — injected into system prompt of a lightweight model
 - Quota-aware routing — reads from existing `clew/quota.py` and `clew/token_tracker.py`
+
+## Issue #3–#9 Implementation Notes (2025-07-25)
+
+### Issue #3 — Guardian tests
+**Files**: `clew/agent/guardian.py`, `clew/agent/test_guardian.py`
+
+Fixed five failing tests in the original `test_guardian.py` and
+extended coverage from 13 to 43 tests. The original `assess_risk`
+had a duplicated `execute_command` block (lines 91–111 and 113–135
+in the legacy file) that suppressed reason strings on the medium-risk
+path, and `CRITICAL_PATHS` did not include system directories like
+`/etc`, so `write_file("/etc/passwd")` was scored as medium instead
+of high. Both bugs are fixed.
+
+### Issue #4 — Guardian Agent sub-reviewer
+**Files**: `clew/agent/guardian.py`
+
+Added `GuardianConfig.use_subagent` flag and `review_with_subagent`
+function. When the flag is set, `review_with_llm` delegates the LLM
+call to a read-only `explore` subagent (read-only is enforced at
+toolset construction time — the `explore` subagent has no
+`write_file` / `execute_command` / `str_replace` tools advertised to
+the LLM). The subagent's response is parsed with the same
+`_parse_verdict` helper, so verdict semantics stay identical to the
+direct-provider path.
+
+### Issue #5 — Marker-based context fragments
+**Files**: `clew/agent/context_fragments.py`, `clew/agent/test_context_fragments.py`
+
+Tools can emit `<context_fragment type="..." id="...">...</context_fragment>`
+blocks inside the conversation history. The compactor preserves the
+latest occurrence per (type, id) and replaces older occurrences with
+a tombstone: header + one-line digest + closing tag. Non-fragment
+text is left untouched. Configurable via `FragmentCompactionConfig`
+(keep per-id, keep per-type, collapse-type filter, digest length).
+
+### Issue #6 — SQLite persistence
+**Files**: `clew/session/sqlite_persistence.py`, `clew/session/test_sqlite_persistence.py`, `clew/agent_runtime.py`
+
+`SQLitePersistence` adapter stores each message as a row, supports
+multi-session databases, range queries (`load_range(offset, limit)`),
+and O(log N) appends. `ContextMemory.save()` and `ContextMemory.load()`
+auto-dispatch to the SQLite adapter when `persist_path` ends in
+`.db` / `.sqlite` / `.sqlite3`; the JSON path is unchanged for
+backwards compatibility.
+
+### Issue #7 — Collaboration modes
+**Files**: `clew/collaboration.py`, `clew/test_collaboration.py`
+
+Four collaboration modes that compose on top of `SwarmManager`:
+
+- **Reviewer** — implementer + reviewer loop with APPROVE / REJECT /
+  MODIFY verdicts (up to `max_iterations` rounds).
+- **Codegen** — planner decomposes task → N parallel implementers →
+  results concatenated.
+- **Pair** — two agents alternate turns on the same task
+  (`rounds` total).
+- **Observer** — one worker + N read-only observers; warnings collected
+  into `metadata['warnings']` without blocking the worker.
+
+The orchestrator is runtime-agnostic (takes a `run_agent_fn`
+callable), so unit tests inject scripted responses without spinning
+up a real provider.
+
+### Issue #9 — Request serialization queues
+**Files**: `clew/request_queue.py`, `clew/test_request_queue.py`
+
+Per-provider `RequestQueue` with:
+
+- `max_concurrency` semaphore (default 1 = strict serialization).
+- `max_queue_size` cap (raises `QueueFullError` instead of blocking
+  forever).
+- Automatic cooldown after a 429 (default 5s).
+- Exponential backoff retries (default 3, capped at 8s).
+- Sync and async submit paths.
+- `wrap_provider()` monkey-patches a `Provider` instance so
+  `generate` / `stream` go through the queue. `unwrap_provider()`
+  restores the originals.
+
+`QueueRegistry` is a singleton keyed by `provider_id`, so each
+provider gets its own queue.

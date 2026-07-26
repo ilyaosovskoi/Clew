@@ -1,5 +1,5 @@
 /* ===================================================================
-   CLEW v1.0.2 — REAL frontend logic (English)
+   CLEW v2.0.0 — REAL frontend logic (English)
    =================================================================== */
 
 window.__apiBase = null;  // Set by __clewReady from the local API server
@@ -2563,6 +2563,70 @@ async function renderUsageModal(){
     }catch(e){toast('Failed: '+e.message,'error')}
     finally{refreshBtn.textContent='Refresh pricing';refreshBtn.disabled=false}
   });
+
+  // v2.0.0 — Request queue stats panel
+  const queuePanel = document.getElementById('usageQueuePanel');
+  if (queuePanel) {
+    queuePanel.innerHTML = '<div class="settings-section-title">Request Queues</div><div class="dim" style="font-size:12px">Loading…</div>';
+    if (isBackendAvailable()) {
+      try {
+        const r = await callBridge('get_queue_stats');
+        if (r && r.ok) {
+          const stats = r.stats || {};
+          const ids = Object.keys(stats);
+          if (ids.length === 0) {
+            queuePanel.innerHTML = '<div class="settings-section-title">Request Queues</div>' +
+              '<div class="dim" style="font-size:12px">No provider queues registered yet (queues are created on first provider call).</div>';
+          } else {
+            const rows = ids.map(pid => {
+              const s = stats[pid] || {};
+              const cooldown = s.cooldown_until ? new Date(s.cooldown_until).toLocaleTimeString() : '-';
+              return `<tr><td>${pid}</td><td>${s.in_flight||0}/${s.max_in_flight||1}</td><td>${s.pending||0}</td><td>${s.total_retries||0}</td><td>${s.total_errors||0}</td><td>${cooldown}</td></tr>`;
+            }).join('');
+            queuePanel.innerHTML = '<div class="settings-section-title">Request Queues</div>' +
+              '<table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px">' +
+              '<thead><tr><th align="left">Provider</th><th>In-flight</th><th>Pending</th><th>Retries</th><th>Errors</th><th>Cooldown</th></tr></thead>' +
+              '<tbody>' + rows + '</tbody></table>';
+          }
+        }
+      } catch (e) {
+        queuePanel.innerHTML = '<div class="settings-section-title">Request Queues</div>' +
+          '<div class="dim" style="font-size:12px;color:var(--text-muted)">Queue stats unavailable: ' + e.message + '</div>';
+      }
+    } else {
+      queuePanel.innerHTML = '<div class="settings-section-title">Request Queues</div>' +
+        '<div class="dim" style="font-size:12px;color:var(--text-muted)">Backend not connected.</div>';
+    }
+  }
+
+  // v2.0.0 — Persistence backend selector
+  const persPanel = document.getElementById('usagePersistencePanel');
+  if (persPanel) {
+    let current = 'json';
+    if (isBackendAvailable()) {
+      try { const r = await callBridge('get_persistence_backend'); if (r && r.ok) current = r.backend || 'json'; } catch (e) {}
+    }
+    persPanel.innerHTML = `
+      <div class="settings-section-title">Chat storage backend</div>
+      <div class="dim" style="font-size:12px;margin-bottom:8px">
+        Choose where new chats are persisted. Existing chats are not migrated.
+      </div>
+      <select id="usagePersistenceSelect" class="hc-role-select" style="min-width:240px">
+        <option value="json"${current==='json'?' selected':''}>JSON files (~/.clew/chats/*.json)</option>
+        <option value="sqlite"${current==='sqlite'?' selected':''}>SQLite database (~/.clew/chats.sqlite3)</option>
+      </select>`;
+    const sel = document.getElementById('usagePersistenceSelect');
+    if (sel) {
+      sel.addEventListener('change', async () => {
+        if (!isBackendAvailable()) { toast('Backend not connected', 'error'); return; }
+        try {
+          const r = await callBridge('set_persistence_backend', sel.value);
+          if (r && r.ok) toast('Storage backend set to ' + sel.value, 'success');
+          else toast('Failed: ' + (r && r.error), 'error');
+        } catch (e) { toast('Failed: ' + e.message, 'error'); }
+      });
+    }
+  }
 }
 if(window.bridge&&window.bridge.token_stats_updated){
   window.bridge.token_stats_updated.connect(function(){ if(usageModal.classList.contains('open'))renderUsageModal(); });
@@ -2679,14 +2743,21 @@ async function renderSettingsTab(tab){
 // off. This is the first actual UI surface for both.
 async function renderAgentTab(body){
   let autonomy='always_ask', diffReview=true;
+  let guardianLevel='off';
   if(isBackendAvailable()){
     try{autonomy=await callBridge('get_agent_autonomy')}catch(e){}
     try{const s=await callBridge('get_settings');if(s&&typeof s.diff_review==='boolean')diffReview=s.diff_review}catch(e){}
+    try{const g=await callBridge('get_guardian_level');if(g&&g.ok)guardianLevel=g.level||'off'}catch(e){}
   }
   const levels=[
     {id:'always_ask',label:'Always ask',desc:'Confirm before every command, delete, rename, patch, or commit. Safest — the agent pauses for your Allow/Deny on anything side-effecting.'},
     {id:'new_files_only',label:'New files only',desc:'Auto-approve creating brand-new files; still asks before deleting, renaming, running commands, or committing.'},
     {id:'never_ask',label:'Never ask',desc:'Run everything without confirmation. Fastest, but there\u2019s no safety net if the agent gets something wrong.'},
+  ];
+  const guardianLevels=[
+    {id:'off',label:'Off',desc:'Guardian disabled. The agent uses only the autonomy rules above. Fastest, but no LLM safety review.'},
+    {id:'dangerous_only',label:'Dangerous tools only (recommended)',desc:'An LLM reviewer inspects only high-risk tool calls (file paths in /etc, /usr, rm -rf, etc.) and can Approve / Reject / propose a safer alternative.'},
+    {id:'all',label:'All tools',desc:'An LLM reviewer inspects every medium+ risk tool call. Most cautious; adds latency to each side-effecting action.'},
   ];
   body.innerHTML=`
     <div class="settings-section">
@@ -2702,6 +2773,18 @@ async function renderAgentTab(body){
       </div>
     </div>
     <div class="settings-section">
+      <div class="settings-section-title">Guardian safety review</div>
+      <div class="provider-config-card" style="margin-bottom:0">
+        <div style="display:flex;flex-direction:column;gap:var(--s-8)">
+          ${guardianLevels.map(l=>`
+            <label class="autonomy-option${guardianLevel===l.id?' selected':''}" data-guardian="${l.id}" style="display:flex;gap:var(--s-12);align-items:flex-start;padding:var(--s-12);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer">
+              <input type="radio" name="guardianLevel" value="${l.id}" ${guardianLevel===l.id?'checked':''} style="margin-top:2px">
+              <div><div style="font-weight:600;font-size:13px">${l.label}</div><div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${l.desc}</div></div>
+            </label>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
       <div class="settings-section-title">File writes</div>
       <div class="toggle-row">
         <div><div style="font-weight:500;font-size:13px">Show diff before writing files</div><div style="font-size:12px;color:var(--text-muted)">Review a green/red diff and approve it before write_file or str_replace touches disk.</div></div>
@@ -2711,9 +2794,18 @@ async function renderAgentTab(body){
   body.querySelectorAll('input[name="autonomyLevel"]').forEach(inp=>{
     inp.addEventListener('change',async()=>{
       const level=inp.value;
-      body.querySelectorAll('.autonomy-option').forEach(el=>el.classList.toggle('selected',el.dataset.level===level));
+      body.querySelectorAll('.autonomy-option[data-level]').forEach(el=>el.classList.toggle('selected',el.dataset.level===level));
       if(!isBackendAvailable()){toast('Backend not connected','error');return}
       try{await callBridge('set_agent_autonomy',level);toast('Autonomy set to '+level.replace(/_/g,' '),'success')}
+      catch(e){toast('Failed: '+e.message,'error')}
+    });
+  });
+  body.querySelectorAll('input[name="guardianLevel"]').forEach(inp=>{
+    inp.addEventListener('change',async()=>{
+      const level=inp.value;
+      body.querySelectorAll('.autonomy-option[data-guardian]').forEach(el=>el.classList.toggle('selected',el.dataset.guardian===level));
+      if(!isBackendAvailable()){toast('Backend not connected','error');return}
+      try{await callBridge('set_guardian_level',level);toast('Guardian level set to '+level.replace(/_/g,' '),'success')}
       catch(e){toast('Failed: '+e.message,'error')}
     });
   });
@@ -3421,15 +3513,15 @@ function showGuardianConfirm(info){
 
   newApprove.addEventListener('click',()=>{
     modal.style.display='none';
-    if(isBackendAvailable())callBridge('respond_guardian_verdict','approve');
+    if(isBackendAvailable())callBridge('respond_guardian_review','approve');
   });
   newReject.addEventListener('click',()=>{
     modal.style.display='none';
-    if(isBackendAvailable())callBridge('respond_guardian_verdict','reject');toast('Guardian review rejected','warning');
+    if(isBackendAvailable())callBridge('respond_guardian_review','reject');toast('Guardian review rejected','warning');
   });
   newUseFix.addEventListener('click',()=>{
     modal.style.display='none';
-    if(isBackendAvailable())callBridge('respond_guardian_verdict','use_fix');
+    if(isBackendAvailable())callBridge('respond_guardian_review','use_fix');
   });
 }
 
@@ -3644,71 +3736,20 @@ document.addEventListener('dblclick', function(e) {
 });
 
 /* ===================================================================
-   v1.0.3 — SECTION SWITCHER (General / Heavy Code / Office Worker)
+   v2.0.0 — SECTION SWITCHER (General / Heavy Code / Office Worker)
+   The orphaned heavycodeOverlay / officeOverlay logic was removed;
+   section switching is fully handled by the HC-pane / Office-pane
+   modules further below. This block now only syncs the active state
+   of the section buttons.
    =================================================================== */
 (function(){
   const switcher = document.getElementById('sectionSwitcher');
-  const heavyOverlay = document.getElementById('heavycodeOverlay');
-  const officeOverlay = document.getElementById('officeOverlay');
-  const backdrop = document.getElementById('csBackdrop');
-  const stage = document.querySelector('.stage');
   if(!switcher) return;
-
-  function closeOverlays() {
-    heavyOverlay.classList.remove('visible');
-    if(officeOverlay) officeOverlay.classList.remove('visible');
-    if(backdrop) backdrop.classList.remove('visible');
-    stage.style.position = '';
-    stage.style.zIndex = '';
-    switcher.querySelectorAll('.section-btn').forEach(b => b.classList.remove('active'));
-    switcher.querySelector('[data-section="general"]').classList.add('active');
-  }
-
   switcher.querySelectorAll('.section-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const section = btn.dataset.section;
-      if(section === 'general') {
-        closeOverlays();
-        return;
-      }
-
-      // Show overlay (heavy code only, office has its own pane)
-      heavyOverlay.classList.remove('visible');
-      if(officeOverlay) officeOverlay.classList.remove('visible');
-
       switcher.querySelectorAll('.section-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-
-      if(section === 'heavycode') {
-        heavyOverlay.classList.add('visible');
-        if(backdrop) backdrop.classList.add('visible');
-        stage.style.position = 'relative';
-      } else if(section === 'office') {
-        // Office uses its own pane, not overlay — handled by office pane module
-        // The office pane module will handle showing the pane
-      }
     });
-  });
-
-  // Back and Close buttons inside overlays (only heavy code now)
-  document.querySelectorAll('[data-cs-back], [data-cs-close]').forEach(btn => {
-    btn.addEventListener('click', (e) => { e.stopPropagation(); closeOverlays(); });
-  });
-
-  // Click on backdrop to close
-  if(backdrop) {
-    backdrop.addEventListener('click', closeOverlays);
-  }
-
-  // ESC to close
-  document.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape') {
-      if(heavyOverlay.classList.contains('visible') || officeOverlay.classList.contains('visible')) {
-        closeOverlays();
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    }
   });
 })();
 
@@ -5008,6 +5049,56 @@ window.finalizeMessage = function(result) {
         const agentTab = document.querySelector('.modal-tab[data-tab="agent"]');
         if (agentTab) agentTab.click();
       }, 100);
+    });
+  }
+
+  // v2.0.0 — Collaboration mode button (Reviewer / Codegen / Pair / Observer)
+  const hcCollabBtn = document.getElementById('hcRunCollabBtn');
+  if (hcCollabBtn) {
+    hcCollabBtn.addEventListener('click', async () => {
+      const sel = document.getElementById('hcCollabMode');
+      const mode = sel ? sel.value : 'single';
+      const input = document.getElementById('hcComposerInput');
+      const task = input ? input.value.trim() : '';
+      if (mode === 'single') {
+        toast('Pick a collaboration mode other than Single first.', 'warning');
+        return;
+      }
+      if (!task) {
+        toast('Type a task in the Heavy Code composer first.', 'warning');
+        return;
+      }
+      if (!isBackendAvailable()) { toast('Backend not connected', 'error'); return; }
+      hcCollabBtn.disabled = true;
+      hcCollabBtn.textContent = 'Running...';
+      try {
+        const r = await callBridge('run_collaboration', mode, task);
+        if (r && r.ok) {
+          const meta = r.metadata || {};
+          const verdict = meta.verdict ? `  |  verdict: ${meta.verdict}` : '';
+          const iters = r.iterations ? `  |  iterations: ${r.iterations}` : '';
+          toast(`Collaboration ${mode} complete${iters}${verdict}`, 'success');
+          if (input) input.value = '';
+          // Surface the output in the HC chat view
+          const view = document.getElementById('hcChatView');
+          if (view) {
+            const msg = document.createElement('div');
+            msg.className = 'msg assistant';
+            const header = `<div class="msg-meta">${mode} · ${meta.verdict || 'done'}</div>`;
+            const body = `<div class="msg-content">${(r.output || '').replace(/</g,'&lt;')}</div>`;
+            msg.innerHTML = header + body;
+            view.appendChild(msg);
+            view.scrollTop = view.scrollHeight;
+          }
+        } else {
+          toast('Collaboration failed: ' + (r && r.error ? r.error : 'unknown'), 'error');
+        }
+      } catch (e) {
+        toast('Collaboration error: ' + e.message, 'error');
+      } finally {
+        hcCollabBtn.disabled = false;
+        hcCollabBtn.textContent = 'Run collaboration on next prompt';
+      }
     });
   }
 

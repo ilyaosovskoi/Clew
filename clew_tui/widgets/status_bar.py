@@ -2,7 +2,7 @@
 session tokens, keyboard shortcuts, and animated spinner.
 
 The bar shows:
-  LEFT: section badge + animated state indicator (idle/thinking/tool)
+  LEFT: section badge + Guardian level badge + animated state indicator (idle/thinking/tool)
   CENTER: provider/model + tokens/cost
   RIGHT: keyboard shortcut hints
 
@@ -23,6 +23,12 @@ SECTION_LABELS = {
     "office": "Office",
 }
 
+GUARDIAN_LABELS = {
+    "off": ("off", "grey62"),
+    "dangerous_only": ("dangerous", "yellow"),
+    "all": ("all", "red"),
+}
+
 # Braille spinner frames for thinking/running animation
 _SPINNER_FRAMES = [
     "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏",
@@ -40,6 +46,7 @@ class StatusBar(Static):
         self._cost: float = 0.0
         self._section: str = "general"
         self._state: str = "idle"
+        self._guardian: str = "off"
         self._spinner_task: Optional[asyncio.Task] = None
         self._spinner_frame: int = 0
         # Set initial content so _render() never returns None
@@ -55,6 +62,7 @@ class StatusBar(Static):
         status: Dict[str, Any],
         state: str = "idle",
         section: str = "general",
+        guardian: Optional[str] = None,
     ) -> None:
         """Update all status fields and refresh the display."""
         self._provider = status.get("provider") or "?"
@@ -62,6 +70,8 @@ class StatusBar(Static):
         self._tokens = int(status.get("tokens", 0) or 0)
         self._cost = float(status.get("cost", 0.0) or 0.0)
         self._section = section
+        if guardian is not None:
+            self._guardian = guardian
 
         old_state = self._state
         self._state = state
@@ -95,7 +105,11 @@ class StatusBar(Static):
             "office": "yellow",
         }.get(self._section, "cyan")
 
-        left = f" [{section_style}]{section_label}[/{section_style}] "
+        # Guardian badge (v2.0.0)
+        g_label, g_color = GUARDIAN_LABELS.get(self._guardian, ("off", "grey62"))
+        guardian_markup = f"[{g_color}]guardian:{g_label}[/{g_color}]"
+
+        left = f" [{section_style}]{section_label}[/{section_style}]  {guardian_markup} "
         center = f" {state_markup}  |  [b]{self._provider}[/b]/[dim]{self._model}[/dim] "
         right = f" [dim]{self._tokens:,} tok | ${self._cost:.4f}[/dim] "
 

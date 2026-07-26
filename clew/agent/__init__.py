@@ -60,6 +60,11 @@ from .acp_server import ACPServer
 
 __version__ = "2.0.0"
 
+def get_circuit_breaker_registry():
+    """Return a new CircuitBreakerRegistry instance."""
+    return CircuitBreakerRegistry()
+
+
 __all__ = [
     "__version__",
     # Native
@@ -84,6 +89,7 @@ __all__ = [
     "CircuitBreakerRegistry",
     "CircuitBreaker",
     "RetryDisposition",
+    "get_circuit_breaker_registry",
     # Compaction
     "CompactionEngine",
     "CompactionPolicy",

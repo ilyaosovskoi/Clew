@@ -9,7 +9,7 @@ supports it (see bridge.py _on_token_delta_event).
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -68,7 +68,7 @@ class ChatLog(RichLog):
         """Append a streaming token chunk to the live assistant response."""
         if not self._streaming_active:
             self._streaming_active = True
-            self._streaming_text = ""
+            self._streaming_text = chunk  # v2.0.0 fix: don't drop the first chunk
             self.write(Text(chunk, style="green"))
         else:
             self._streaming_text += chunk
@@ -107,17 +107,64 @@ class ChatLog(RichLog):
             )
         )
 
-    # ---- tools --------------------------------------------------------------
-
-    def add_tool_call(self, tool: str, args: Dict[str, Any]) -> None:
-        """Display a tool invocation."""
-        body = self._render_tool_args(tool, args)
+    def add_reviewer_verdict(self, verdict: str, feedback: str = "",
+                             iterations: int = 0) -> None:
+        """Render a reviewer verdict panel (v2.0.0 — collaboration modes)."""
+        color = {
+            "APPROVE": "green",
+            "REJECT": "red",
+            "MODIFY": "yellow",
+            "EXHAUSTED": "grey42",
+        }.get(verdict.upper(), "cyan")
+        body_lines = [Text(f"Verdict: {verdict}", style=f"bold {color}")]
+        if iterations:
+            body_lines.append(Text(f"Iterations: {iterations}", style="dim"))
+        if feedback:
+            body_lines.append(Text(feedback.rstrip(), style="white"))
+        body = _Group(*body_lines)
         self.write(
             Panel(
                 body,
-                title=f" tool -> {tool} ",
+                title=" reviewer verdict ",
+                title_align="left",
+                border_style=color,
+            )
+        )
+
+    def add_observer_warnings(self, warnings: list) -> None:
+        """Render observer-mode warnings as a yellow warning panel (v2.0.0)."""
+        if not warnings:
+            return
+        body = Text("\n".join(f"• {w}" for w in warnings), style="yellow")
+        self.write(
+            Panel(
+                body,
+                title=f" observer warnings ({len(warnings)}) ",
                 title_align="left",
                 border_style="yellow",
+            )
+        )
+
+    # ---- tools --------------------------------------------------------------
+
+    def add_tool_call(self, tool: str, args: Dict[str, Any],
+                      sub_label: Optional[str] = None) -> None:
+        """Display a tool invocation.
+
+        If sub_label is provided, prefix the panel title with the subagent
+        name so the user can tell which agent produced the call.
+        """
+        body = self._render_tool_args(tool, args)
+        title = f" tool -> {tool} "
+        if sub_label:
+            title = f" [{sub_label}] tool -> {tool} "
+        border = "blue" if sub_label else "yellow"
+        self.write(
+            Panel(
+                body,
+                title=title,
+                title_align="left",
+                border_style=border,
             )
         )
 

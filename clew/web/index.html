@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Clew v1.3.0 — Spaces for Thinking</title>
+<title>Clew v2.0.0 — Spaces for Thinking</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
@@ -48,7 +48,7 @@
         </div>
       </div>
       <div class="brand-name">Clew</div>
-      <div class="brand-version">v1.3.0</div>
+      <div class="brand-version">v2.0.0</div>
     </div>
     <!-- Section Switcher -->
     <div class="section-switcher" id="sectionSwitcher">
@@ -444,6 +444,19 @@
             </select>
           </div>
 
+          <div class="hc-sidebar-section">
+            <div class="hc-sidebar-title">Collaboration Mode</div>
+            <div class="hc-role-hint">Compose multiple agents on the next prompt:</div>
+            <select id="hcCollabMode" class="hc-role-select" title="Pick a collaboration mode to run on the next prompt.">
+              <option value="single" selected>Single (no collaboration)</option>
+              <option value="reviewer">Reviewer (implement + review loop)</option>
+              <option value="codegen">Codegen (plan + parallel implementers)</option>
+              <option value="pair">Pair (two pair-programmers)</option>
+              <option value="observer">Observer (worker + read-only observers)</option>
+            </select>
+            <button class="btn-secondary" id="hcRunCollabBtn" style="margin-top:8px;width:100%">Run collaboration on next prompt</button>
+          </div>
+
           <details class="hc-more">
             <summary class="hc-more-summary">
               <span>More details</span>
@@ -680,9 +693,10 @@
     <button class="modal-close" id="usageClose"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
   </div>
   <div class="modal-body" id="usageBody"></div>
+  <!-- v2.0.0 — additional panels appended by renderUsageModal() -->
+  <div class="modal-body" id="usageQueuePanel" style="border-top:1px solid var(--border);padding-top:16px"></div>
+  <div class="modal-body" id="usagePersistencePanel" style="border-top:1px solid var(--border);padding-top:16px"></div>
 </div>
-
-<!-- Account Modal -->
 <div class="modal-backdrop" id="accountBackdrop"></div>
 <div class="modal" id="accountModal" style="max-width:min(440px,92vw)">
   <div class="modal-header">

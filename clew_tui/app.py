@@ -56,9 +56,16 @@ class ClewTUIApp(App):
     def on_mount(self) -> None:
         self.bridge.set_event_sink(self._sink)
         self.bridge.set_confirm_handler(self._confirm)
+        # v2.0.0 fix: wire the guardian handler so Guardian MODIFY verdicts
+        # actually reach the GuardianModal instead of being silently approved.
+        self.bridge.set_guardian_handler(self._confirm)
+        try:
+            from clew import __version__ as _clew_version
+        except Exception:
+            _clew_version = "2.0.0"
         chat = self.query_one(ChatLog)
         chat.add_system(
-            f"clew TUI | workspace: {self.bridge.workspace}\n"
+            f"clew TUI v{_clew_version} | workspace: {self.bridge.workspace}\n"
             f"Section: {self.bridge.section}\n"
             "Type a request and press Enter. Type / for slash commands.\n"
             "Ctrl+C interrupts, Ctrl+D quits, Ctrl+G launches GUI."
@@ -235,6 +242,18 @@ class ClewTUIApp(App):
             self.action_launch_gui()
         elif cmd == "/guardian":
             self._exec_guardian(arg)
+        elif cmd == "/collab":
+            self._exec_collab(arg)
+        elif cmd == "/queue":
+            self._exec_queue()
+        elif cmd == "/storage":
+            self._exec_storage(arg)
+        elif cmd == "/sessions":
+            self._exec_sessions()
+        elif cmd == "/context":
+            self._exec_context()
+        elif cmd == "/tools":
+            self._exec_tools()
         else:
             self.query_one(ChatLog).add_system(
                 f"Unknown command: {cmd}. Type /help for available commands."
@@ -288,6 +307,12 @@ class ClewTUIApp(App):
             self._open_chat_palette()
         elif cmd_id == "cd":
             self._open_cd_palette()
+        elif cmd_id == "guardian":
+            self._open_guardian_palette()
+        elif cmd_id == "collab":
+            self._open_collab_palette()
+        elif cmd_id == "storage":
+            self._open_storage_palette()
         else:
             self.query_one(ChatLog).add_system(
                 f"Command /{cmd_id} needs a parameter. Type /{cmd_id} <value> directly."
@@ -313,6 +338,12 @@ class ClewTUIApp(App):
                 self._exec_chat(selected_id)
             elif cmd_name == "cd":
                 self._exec_cd(selected_id)
+            elif cmd_name == "guardian":
+                self._exec_guardian(selected_id)
+            elif cmd_name == "collab":
+                self._exec_collab(selected_id)
+            elif cmd_name == "storage":
+                self._exec_storage(selected_id)
 
         self.push_screen(palette, on_result)
 
@@ -497,11 +528,18 @@ class ClewTUIApp(App):
             "  [cyan]/files[/cyan]     List files in workspace",
             "  [cyan]/clear[/cyan]     Clear the chat log",
             "  [cyan]/planning[/cyan]  Toggle planning mode",
+            "  [cyan]/guardian[/cyan]  Set Guardian safety level (off/dangerous_only/all)",
+            "  [cyan]/collab[/cyan]    Run a collaboration mode (reviewer/codegen/pair/observer)",
+            "  [cyan]/queue[/cyan]     Show request queue stats (cooldown, retries)",
+            "  [cyan]/storage[/cyan]   Choose chat storage backend (JSON/SQLite)",
+            "  [cyan]/sessions[/cyan]  List SQLite-stored chat sessions",
+            "  [cyan]/context[/cyan]   View context fragments & compaction stats",
+            "  [cyan]/tools[/cyan]     Browse loaded & available progressive tools",
             "  [cyan]/gui[/cyan]       Launch the Clew GUI window",
             "  [cyan]/help[/cyan]      Show this help",
             "",
             "Type / to see inline suggestions, Ctrl+P for full command palette.",
-            "Ctrl+C=interrupt | Ctrl+D=quit | Ctrl+G=GUI | Ctrl+P=commands",
+            "Ctrl+C=interrupt | Ctrl+D=quit | Ctrl+G=GUI | Ctrl+P=commands | Ctrl+T=theme",
             "",
             "[dim]Custom .md commands from .claude/commands/ also appear.[/dim]",
         ]
@@ -542,6 +580,201 @@ class ClewTUIApp(App):
             chat.add_error(f"Failed to set Guardian level: {result.get('error', 'unknown')}")
         self.query_one(InputBox).focus()
 
+    def _open_guardian_palette(self) -> None:
+        options = [
+            {"id": "off", "label": "Off",
+             "desc": "Guardian disabled — fastest, no LLM safety review"},
+            {"id": "dangerous_only", "label": "Dangerous tools only",
+             "desc": "Review only high-risk tool calls (recommended)"},
+            {"id": "all", "label": "All tools",
+             "desc": "Review every medium+ risk tool call"},
+        ]
+        self._open_sub_palette("guardian", options)
+
+    def _open_collab_palette(self) -> None:
+        modes = self.bridge.list_collaboration_modes()
+        options = [{"id": m["id"], "label": m["label"], "desc": m["desc"]}
+                   for m in modes]
+        self._open_sub_palette("collab", options)
+
+    def _open_storage_palette(self) -> None:
+        current = self.bridge.get_persistence_backend()
+        options = [
+            {"id": "json", "label": "JSON files",
+             "desc": "~/.clew/chats/*.json  (default)" + ("  [active]" if current == "json" else "")},
+            {"id": "sqlite", "label": "SQLite database",
+             "desc": "~/.clew/chats.sqlite3  (single-file, O(log N) append)" + ("  [active]" if current == "sqlite" else "")},
+        ]
+        self._open_sub_palette("storage", options)
+
+    def _exec_collab(self, arg: str) -> None:
+        """Run a collaboration-mode task. arg = '<mode> <task text>' or '<mode>'."""
+        arg = arg.strip()
+        if not arg:
+            self._open_collab_palette()
+            return
+        parts = arg.split(None, 1)
+        mode = parts[0].lower()
+        task = parts[1].strip() if len(parts) > 1 else ""
+        valid_modes = {"single", "reviewer", "codegen", "pair", "observer"}
+        if mode not in valid_modes:
+            self.query_one(ChatLog).add_system(
+                f"Unknown collaboration mode: {mode}\n"
+                f"Valid: {', '.join(sorted(valid_modes))}"
+            )
+            self.query_one(InputBox).focus()
+            return
+        if mode == "single":
+            self.query_one(ChatLog).add_system(
+                "Single mode = no collaboration. Just type your task as a normal prompt."
+            )
+            self.query_one(InputBox).focus()
+            return
+        if not task:
+            self.query_one(ChatLog).add_system(
+                f"Usage: /collab {mode} <task description>\n"
+                f"Example: /collab {mode} Refactor the auth module to use async/await"
+            )
+            self.query_one(InputBox).focus()
+            return
+        # Render the task as a user message, then run collaboration in a worker
+        chat = self.query_one(ChatLog)
+        chat.add_user(f"[collab:{mode}] {task}")
+        self._running = True
+        self._refresh_status("thinking")
+        self._run_collaboration(mode, task)
+
+    @work(thread=True, exclusive=True)
+    def _run_collaboration(self, mode: str, task: str) -> None:
+        try:
+            result = self.bridge.run_collaboration(mode, task)
+            self.call_from_thread(self._on_collab_done, result)
+        except Exception as e:
+            self.call_from_thread(self._on_turn_error, str(e))
+
+    def _on_collab_done(self, result: Dict[str, Any]) -> None:
+        chat = self.query_one(ChatLog)
+        if not result.get("ok"):
+            chat.add_error(f"Collaboration failed: {result.get('error', 'unknown')}")
+            self._running = False
+            self._refresh_status("idle")
+            return
+        output = result.get("output", "") or ""
+        if output:
+            chat.add_final(output)
+        metadata = result.get("metadata", {}) or {}
+        verdict = metadata.get("verdict")
+        iterations = result.get("iterations", 0)
+        if verdict:
+            feedback = metadata.get("feedback", "") or metadata.get("reason", "")
+            chat.add_reviewer_verdict(verdict, feedback, iterations)
+        observer_warnings = metadata.get("observer_warnings") or []
+        if observer_warnings:
+            chat.add_observer_warnings(observer_warnings)
+        self._running = False
+        self._refresh_status("idle")
+        self.query_one(InputBox).focus()
+
+    def _exec_queue(self) -> None:
+        stats = self.bridge.get_queue_stats()
+        chat = self.query_one(ChatLog)
+        if not stats:
+            chat.add_system(
+                "[b]Request Queues[/b]\n"
+                "  No provider queues registered yet.\n"
+                "  Queues are created on first provider call."
+            )
+        else:
+            lines = ["[b]Request Queues[/b]", ""]
+            for pid, s in stats.items():
+                cooldown = s.get("cooldown_until")
+                if cooldown:
+                    import time as _t
+                    remaining = max(0, int(cooldown - _t.time()))
+                    cooldown_str = f"{remaining}s"
+                else:
+                    cooldown_str = "-"
+                lines.append(
+                    f"  [cyan]{pid}[/cyan]:  "
+                    f"in-flight {s.get('in_flight', 0)}/{s.get('max_in_flight', 1)}  "
+                    f"pending {s.get('pending', 0)}  "
+                    f"retries {s.get('total_retries', 0)}  "
+                    f"errors {s.get('total_errors', 0)}  "
+                    f"cooldown: {cooldown_str}"
+                )
+            chat.add_system("\n".join(lines))
+        self.query_one(InputBox).focus()
+
+    def _exec_storage(self, arg: str) -> None:
+        arg = arg.strip().lower()
+        if not arg:
+            self._open_storage_palette()
+            return
+        result = self.bridge.set_persistence_backend(arg)
+        chat = self.query_one(ChatLog)
+        if result.get("ok"):
+            chat.add_system(f"Storage backend set to: [b]{result['backend']}[/b]")
+        else:
+            chat.add_error(f"Failed: {result.get('error', 'unknown')}")
+        self.query_one(InputBox).focus()
+
+    def _exec_sessions(self) -> None:
+        sessions = self.bridge.list_sqlite_sessions()
+        chat = self.query_one(ChatLog)
+        if not sessions:
+            chat.add_system(
+                "[b]SQLite Sessions[/b]\n"
+                "  No sessions found. Switch to SQLite storage via /storage "
+                "and run some chats to populate the database."
+            )
+        else:
+            lines = ["[b]SQLite Sessions[/b] (~/.clew/chats.sqlite3)", ""]
+            for s in sessions[:50]:
+                lines.append(
+                    f"  [{s.get('id', '?')[:8]}]  "
+                    f"{s.get('title', 'Untitled')}  "
+                    f"({s.get('message_count', 0)} msgs)"
+                )
+            if len(sessions) > 50:
+                lines.append(f"  ... and {len(sessions) - 50} more")
+            chat.add_system("\n".join(lines))
+        self.query_one(InputBox).focus()
+
+    def _exec_context(self) -> None:
+        stats = self.bridge.get_compaction_stats()
+        chat = self.query_one(ChatLog)
+        if not stats:
+            chat.add_system(
+                "[b]Context Fragments[/b]\n"
+                "  No compaction has run yet this session."
+            )
+        else:
+            chat.add_system(
+                "[b]Context Fragments (last compaction)[/b]\n"
+                f"  Original fragments:  {stats.get('original_fragments', '?')}\n"
+                f"  Kept:                {stats.get('kept_fragments', '?')}\n"
+                f"  Dropped (tombstoned): {stats.get('dropped_fragments', '?')}\n"
+                f"  Chars saved:         {stats.get('chars_saved', 0):,}"
+            )
+        self.query_one(InputBox).focus()
+
+    def _exec_tools(self) -> None:
+        state = self.bridge.get_tool_catalog_state()
+        chat = self.query_one(ChatLog)
+        loaded = state.get("loaded", [])
+        available = state.get("available", [])
+        saved = state.get("prompt_chars_saved", 0)
+        chat.add_system(
+            f"[b]Progressive Tools Catalog[/b]\n"
+            f"  Loaded:   {len(loaded)}  (full schemas shipped to the model)\n"
+            f"  Available: {len(available)}  (callable via select_tools)\n"
+            f"  Prompt chars saved: {saved:,}\n"
+            f"\n"
+            f"  Loaded: {', '.join(loaded[:20])}{'...' if len(loaded) > 20 else ''}\n"
+            f"  Sample available: {', '.join(available[:20])}{'...' if len(available) > 20 else ''}"
+        )
+        self.query_one(InputBox).focus()
+
     # --------------------------------------------------------------- worker
     @work(thread=True, exclusive=True)
     def _run_turn(self, prompt: str) -> None:
@@ -560,27 +793,49 @@ class ClewTUIApp(App):
         self._dark_theme = not self._dark_theme
         theme = "dark" if self._dark_theme else "light"
         self.notify(f"Theme switched to {theme}")
-        # Update CSS path to switch themes
+        # Update CSS path to switch themes, then reload so the new
+        # stylesheet actually applies. Without reload_css() Textual keeps
+        # the previously-loaded stylesheet cached.
         if self._dark_theme:
             self.CSS_PATH = "styles_dark.tcss"
         else:
             self.CSS_PATH = "styles_light.tcss"
+        try:
+            self.reload_css()
+        except Exception:
+            pass
 
     def _handle_event(self, kind: str, data: Dict[str, Any]) -> None:
         chat = self.query_one(ChatLog)
+        # v2.0.0: surface subagent events distinctly so the user can tell
+        # which agent produced a thought / tool call / result.
+        sub_label = data.get("parent_label") or data.get("subagent_label")
         if kind == "plan_created":
             chat.add_plan(str(data.get("plan", "")))
         elif kind == "thought":
-            chat.add_thought(str(data.get("thought", "")))
+            text = str(data.get("thought", ""))
+            if sub_label:
+                chat.add_thought(f"[subagent {sub_label}] {text}")
+            else:
+                chat.add_thought(text)
         elif kind == "token_delta":
             chat.append_token_delta(str(data.get("delta", "")))
         elif kind == "tool_called":
             self._refresh_status("running")
-            chat.add_tool_call(str(data.get("tool", "?")), data.get("args") or {})
+            tool = str(data.get("tool", "?"))
+            args = data.get("args") or {}
+            if sub_label:
+                chat.add_tool_call(tool, args, sub_label=sub_label)
+            else:
+                chat.add_tool_call(tool, args)
         elif kind == "tool_result":
             chat.add_tool_result(str(data.get("tool", "?")), str(data.get("result", "")))
             self._refresh_status("thinking")
         elif kind == "iteration_start":
+            self._refresh_status("thinking")
+        elif kind == "iteration_end":
+            # v2.0.0 fix: transition back to "thinking" between iterations
+            # so the StatusBar doesn't get stuck on "tool running".
             self._refresh_status("thinking")
         elif kind == "error":
             chat.add_error(str(data.get("error", "unknown error")))
@@ -678,8 +933,14 @@ class ClewTUIApp(App):
         self._refresh_status("idle")
 
     def _refresh_status(self, state: str) -> None:
+        guardian_level = "off"
+        try:
+            guardian_level = self.bridge.get_guardian_level().get("level", "off")
+        except Exception:
+            pass
         self.query_one(StatusBar).update_status(
-            self.bridge.status(), state=state, section=self.bridge.section
+            self.bridge.status(), state=state, section=self.bridge.section,
+            guardian=guardian_level,
         )
 
     # ------------------------------------------------------------------ actions

@@ -67,9 +67,10 @@ clew_tui/
 ├── widgets/
 │   ├── chat_log.py      # scrollable dialog, Markdown + tool-call panels + streaming
 │   ├── input_box.py     # bottom input + Up/Down history
-│   ├── status_bar.py    # provider/model, tokens, state
+│   ├── status_bar.py    # provider/model, tokens, state, Guardian badge
 │   └── approval_modal.py
-└── styles.tcss
+├── styles_dark.tcss     # dark theme (default)
+└── styles_light.tcss    # light theme (Ctrl+T)
 ```
 
 ## GUI ↔ TUI switching
