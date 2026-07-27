@@ -3143,6 +3143,342 @@ class ClewBridge(QObject):
         """Delete a slash command."""
         return self._slash_commands.delete_command(cmd_id)
 
+    # ── v2.0.1 (G7) — Capability catalog ──────────────────────────
+
+    @Slot(result='QVariantMap')
+    def list_capabilities(self):
+        """List every capability in the catalog (built-in + user + project)."""
+        try:
+            from ..capability_catalog import get_catalog
+            catalog = get_catalog()
+            workspace = self._config.get("project_root") or os.getcwd()
+            if workspace and not catalog._project_root:
+                catalog.set_project_root(workspace)
+            return {
+                "ok": True,
+                "capabilities": catalog.list_as_dicts(include_body=False),
+                "categories": catalog.list_categories(),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e), "capabilities": [], "categories": []}
+
+    @Slot(str, result='QVariantMap')
+    def get_capability(self, cap_id):
+        """Get the full capability (with body) by id."""
+        try:
+            from ..capability_catalog import get_catalog
+            catalog = get_catalog()
+            cap = catalog.get(cap_id)
+            if cap is None:
+                return {"ok": False, "error": f"Unknown capability: {cap_id}"}
+            return {"ok": True, "capability": cap.to_dict(include_body=True)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, str, result='QVariantMap')
+    def fill_capability_template(self, cap_id, values_json):
+        """Substitute $placeholder$ values in the capability body.
+
+        ``values_json`` is a JSON string mapping placeholder name → value.
+        Returns {ok, prompt, capability, missing} on success.
+        """
+        try:
+            from ..capability_catalog import get_catalog
+            values = json.loads(values_json) if values_json else {}
+            catalog = get_catalog()
+            return catalog.fill_template(cap_id, values)
+        except Exception as e:
+            return {"ok": False, "error": str(e), "missing": []}
+
+    # ── v2.0.1 (M1) — Second Opinion (Pro-gated) ──────────────────
+
+    @Slot(result='QVariantMap')
+    def get_pro_status(self):
+        """Return whether Clew Pro is enabled."""
+        try:
+            from ..second_opinion import is_pro_enabled
+            return {"ok": True, "pro": bool(is_pro_enabled())}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "pro": False}
+
+    @Slot(bool, result='QVariantMap')
+    def set_pro_enabled(self, enabled):
+        """Toggle the Clew Pro flag."""
+        try:
+            from ..second_opinion import set_pro_enabled as _set_pro, is_pro_enabled
+            _set_pro(bool(enabled))
+            return {"ok": True, "pro": bool(is_pro_enabled())}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(result='QVariantMap')
+    def get_second_opinion_config(self):
+        """Return the Second Opinion configuration."""
+        try:
+            from ..second_opinion import (
+                get_second_opinion_config as _get, is_pro_enabled,
+            )
+            cfg = _get()
+            return {
+                "ok": True,
+                "enabled": cfg.enabled,
+                "provider_id": cfg.provider_id,
+                "model": cfg.model,
+                "min_risk_level": cfg.min_risk_level,
+                "pro_enabled": bool(is_pro_enabled()),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, str, str, str, result='QVariantMap')
+    def set_second_opinion_config(self, enabled, provider_id, model, min_risk_level):
+        """Update the Second Opinion configuration.
+
+        Empty strings mean 'preserve current value'.
+        """
+        try:
+            from ..second_opinion import (
+                get_second_opinion_config as _get,
+                set_second_opinion_config as _set,
+                SecondOpinionConfig,
+                is_pro_enabled,
+            )
+            cur = _get()
+            new_cfg = SecondOpinionConfig(
+                enabled=cur.enabled if enabled == "" else (enabled.lower() in ("true", "1", "yes", "on")),
+                provider_id=cur.provider_id if provider_id == "" else provider_id,
+                model=cur.model if model == "" else model,
+                min_risk_level=cur.min_risk_level if min_risk_level == "" else min_risk_level,
+            )
+            _set(new_cfg)
+            return {
+                "ok": True,
+                "enabled": new_cfg.enabled,
+                "provider_id": new_cfg.provider_id,
+                "model": new_cfg.model,
+                "min_risk_level": new_cfg.min_risk_level,
+                "pro_enabled": bool(is_pro_enabled()),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, str, result='QVariantMap')
+    def run_second_opinion(self, tool_name, args_json):
+        """Invoke a second model to review a proposed tool call.
+
+        Returns the verdict dict (verdict, rationale, suggested_args,
+        provider_id, model, elapsed_ms, error).
+        """
+        try:
+            from ..second_opinion import (
+                get_second_opinion_config,
+                review_with_second_model,
+                is_pro_enabled,
+            )
+            if not is_pro_enabled():
+                return {
+                    "verdict": "APPROVE",
+                    "rationale": "Second Opinion requires Clew Pro.",
+                    "error": "pro_required",
+                    "provider_id": "",
+                    "model": "",
+                    "elapsed_ms": 0.0,
+                }
+            cfg = get_second_opinion_config()
+            args = json.loads(args_json) if args_json else {}
+            active_pid = self._registry.active_id or "ollama"
+            verdict = review_with_second_model(
+                config=cfg,
+                tool_name=tool_name,
+                args=args,
+                risk_level="medium",
+                risk_reasons=[],
+                recent_context="",
+                provider_registry=self._registry,
+                active_provider_id=active_pid,
+            )
+            return verdict.to_dict()
+        except Exception as e:
+            return {
+                "verdict": "APPROVE",
+                "rationale": f"Second Opinion error: {e}",
+                "error": str(e),
+                "provider_id": "",
+                "model": "",
+                "elapsed_ms": 0.0,
+            }
+
+    # ── v2.0.1 (G3) — Token budget ────────────────────────────────
+
+    @Slot(result='QVariantMap')
+    def get_token_budget(self):
+        """Return the current token budget + live usage against the caps."""
+        try:
+            from ..token_budget import get_token_budget, check_budget
+            budget = get_token_budget()
+            tracker = getattr(self, "_tracker", None)
+            check = check_budget(budget=budget, token_tracker=tracker)
+            return {
+                "ok": True,
+                **budget.to_dict(),
+                "day_cost": check.daily_used,
+                "month_cost": check.monthly_used,
+                "day_used_pct": check.day_used_pct,
+                "month_used_pct": check.month_used_pct,
+                "exceeded": check.exceeded,
+                "reason": check.reason,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def set_token_budget(self, updates_json):
+        """Update token budget fields. ``updates_json`` is a JSON object
+        with any of: daily_usd, monthly_usd, max_tokens_per_turn,
+        max_iterations, compaction_threshold_pct, prompt_caching,
+        predictable_mode. Missing fields are preserved.
+        """
+        try:
+            from ..token_budget import set_token_budget as _set
+            updates = json.loads(updates_json) if updates_json else {}
+            new_budget = _set(
+                daily_usd=updates.get("daily_usd"),
+                monthly_usd=updates.get("monthly_usd"),
+                max_tokens_per_turn=updates.get("max_tokens_per_turn"),
+                max_iterations=updates.get("max_iterations"),
+                compaction_threshold_pct=updates.get("compaction_threshold_pct"),
+                prompt_caching=updates.get("prompt_caching"),
+                predictable_mode=updates.get("predictable_mode"),
+            )
+            return {"ok": True, **new_budget.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(result='QVariantMap')
+    def reset_token_budget(self):
+        """Restore the default token budget."""
+        try:
+            from ..token_budget import reset_token_budget as _reset
+            budget = _reset()
+            return {"ok": True, **budget.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(result='QVariantMap')
+    def check_budget(self):
+        """Check whether the budget has been exceeded."""
+        try:
+            from ..token_budget import get_token_budget, check_budget
+            budget = get_token_budget()
+            tracker = getattr(self, "_tracker", None)
+            check = check_budget(budget=budget, token_tracker=tracker)
+            return {"ok": True, **check.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.0.1 (G4) — Cross-model verification ────────────────────
+
+    @Slot(str, str, result='QVariantMap')
+    def verify_last_response(self, verifier_provider_id, verifier_model):
+        """Run cross-model verification on the most recent agent output.
+
+        Empty strings mean 'pick a verifier from a different family'.
+        """
+        try:
+            from ..second_opinion import (
+                get_second_opinion_config, resolve_second_provider,
+            )
+            from ..providers import ProviderMessage
+
+            # Capture the last assistant response
+            last_output = ""
+            last_user = ""
+            agent_rt = self._agent_runtime
+            if agent_rt is not None:
+                try:
+                    msgs = agent_rt.memory.messages
+                    for m in reversed(msgs):
+                        if getattr(m, "role", "") == "assistant" and getattr(m, "content", ""):
+                            last_output = m.content
+                            break
+                    for m in reversed(msgs):
+                        if getattr(m, "role", "") == "user" and getattr(m, "content", ""):
+                            last_user = m.content
+                            break
+                except Exception:
+                    pass
+
+            if not last_output:
+                return {"ok": False, "error": "No prior assistant response to verify."}
+
+            active_pid = self._registry.active_id or "ollama"
+            if verifier_provider_id:
+                v_pid = verifier_provider_id
+                v_model = verifier_model or ""
+            else:
+                cfg = get_second_opinion_config()
+                v_pid, v_model = resolve_second_provider(active_pid, cfg)
+            if not v_model:
+                try:
+                    cls = self._registry._classes.get(v_pid)
+                    v_model = cls.default_model if cls else ""
+                except Exception:
+                    v_model = ""
+
+            provider = self._registry.get(v_pid)
+            if not provider.is_loaded:
+                provider.load()
+
+            system_prompt = (
+                "You are an independent verifier reviewing another AI agent's response.\n"
+                "Return STRICT JSON: {overall, correctness, safety, completeness, "
+                "issues[], suggestions[], summary}.\n"
+                "Each verdict is PASS | WARN | FAIL.\n"
+            )
+            user_prompt = (
+                f"## User's request\n{last_user[:2000]}\n\n"
+                f"## Agent's response to verify\n{last_output[:6000]}\n\n"
+                "Return your verdict JSON now."
+            )
+            messages = [
+                ProviderMessage(role="system", content=system_prompt),
+                ProviderMessage(role="user", content=user_prompt),
+            ]
+
+            import time as _t
+            t0 = _t.time()
+            resp = provider.generate(messages, model=v_model)
+            raw = getattr(resp, "text", "") or ""
+            elapsed = (_t.time() - t0) * 1000
+
+            import re as _re
+            m = _re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, _re.DOTALL)
+            if m:
+                raw = m.group(1)
+            else:
+                m = _re.search(r"\{.*\}", raw, _re.DOTALL)
+                if m:
+                    raw = m.group(0)
+            try:
+                verification = json.loads(raw)
+            except Exception:
+                verification = {
+                    "overall": "WARN",
+                    "raw": raw[:2000],
+                    "summary": "Verifier response was not valid JSON; raw text included.",
+                }
+
+            return {
+                "ok": True,
+                "verification": verification,
+                "verifier_provider": v_pid,
+                "verifier_model": v_model,
+                "elapsed_ms": round(elapsed, 1),
+                "original_chars": len(last_output),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     # ── Cleanup ───────────────────────────────────────────────────
 
     def cleanup(self) -> None:

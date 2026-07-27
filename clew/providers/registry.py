@@ -67,12 +67,13 @@ class ProviderRegistry:
         from .cerebras import CerebrasProvider
         from .sambanova import SambaNovaProvider
         from .ollama import OllamaProvider
+        from .nvidia_nim import NvidiaNIMProvider
 
         for cls in (LMStudioProvider, OpenAIProvider, AnthropicProvider,
                     OpenRouterProvider, GroqProvider, DeepSeekProvider,
                     ZAIProvider, GeminiProvider, MistralProvider, TogetherProvider,
                     FireworksProvider, XAIProvider, CerebrasProvider,
-                    SambaNovaProvider, OllamaProvider):
+                    SambaNovaProvider, OllamaProvider, NvidiaNIMProvider):
             self.register(cls)
 
     # ── Configuration ─────────────────────────────────────────────
@@ -172,5 +173,16 @@ def get_registry() -> ProviderRegistry:
             if _registry is None:
                 _registry = ProviderRegistry()
                 _registry.register_default()
+                # Load custom providers after built-ins
+                from .custom_providers import register_custom_providers
+                register_custom_providers(_registry)
                 _registry.set_active("ollama")
     return _registry
+
+
+def reload_registry() -> ProviderRegistry:
+    """Force reload the registry (e.g., after adding custom providers)."""
+    global _registry
+    with _registry_lock:
+        _registry = None
+        return get_registry()

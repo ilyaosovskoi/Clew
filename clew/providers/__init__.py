@@ -47,6 +47,7 @@ from .cerebras import CerebrasProvider
 from .sambanova import SambaNovaProvider
 from .ollama import OllamaProvider
 from .lmstudio import LMStudioProvider
+from .nvidia_nim import NvidiaNIMProvider
 
 __all__ = [
     "Provider",
@@ -72,4 +73,5 @@ __all__ = [
     "SambaNovaProvider",
     "OllamaProvider",
     "LMStudioProvider",
+    "NvidiaNIMProvider",
 ]

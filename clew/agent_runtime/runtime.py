@@ -544,6 +544,20 @@ class AgentRuntime:
         logger.info("[agent] LLM call starting — provider=%s model=%s timeout=%.0fs",
                     provider.provider_id, model_name,
                     getattr(getattr(provider, "config", None), "timeout", 0))
+
+        # v2.0.1 (G3): enforce token budget caps BEFORE the call so a
+        # blown daily/monthly cap short-circuits with a friendly error
+        # instead of letting the provider fail with a confusing 429.
+        try:
+            from clew.token_budget import check_budget
+            budget_check = check_budget(token_tracker=getattr(self, "_token_tracker", None))
+            if budget_check.exceeded:
+                raise RuntimeError(budget_check.reason)
+        except RuntimeError:
+            raise
+        except Exception as _be:
+            logger.debug("[agent] budget check skipped: %s", _be)
+
         for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
             try:
                 resp = provider.generate(messages)

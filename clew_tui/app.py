@@ -24,6 +24,7 @@ from .widgets.command_palette import CommandPalette, CommandEntry, SECTIONS, BUI
 from .widgets.command_suggestions import CommandSuggestions, SuggestionItem
 from .widgets.input_box import InputBox
 from .widgets.status_bar import StatusBar
+from .widgets.verification_modal import VerificationModal
 
 
 class ClewTUIApp(App):
@@ -254,6 +255,14 @@ class ClewTUIApp(App):
             self._exec_context()
         elif cmd == "/tools":
             self._exec_tools()
+        elif cmd == "/capabilities":
+            self._exec_capabilities(arg)
+        elif cmd == "/second_opinion":
+            self._exec_second_opinion(arg)
+        elif cmd == "/verify":
+            self._exec_verify(arg)
+        elif cmd == "/budget":
+            self._exec_budget(arg)
         else:
             self.query_one(ChatLog).add_system(
                 f"Unknown command: {cmd}. Type /help for available commands."
@@ -344,6 +353,11 @@ class ClewTUIApp(App):
                 self._exec_collab(selected_id)
             elif cmd_name == "storage":
                 self._exec_storage(selected_id)
+            elif cmd_name == "capability":
+                # Treat palette-pick as "/capabilities <id>" — will
+                # either run it (no required placeholders) or show
+                # detail with the missing ones.
+                self._exec_capabilities(selected_id)
 
         self.push_screen(palette, on_result)
 
@@ -535,6 +549,10 @@ class ClewTUIApp(App):
             "  [cyan]/sessions[/cyan]  List SQLite-stored chat sessions",
             "  [cyan]/context[/cyan]   View context fragments & compaction stats",
             "  [cyan]/tools[/cyan]     Browse loaded & available progressive tools",
+            "  [cyan]/capabilities[/cyan]  Browse & run pre-built capability templates",
+            "  [cyan]/second_opinion[/cyan] Toggle cross-model review before risky actions (Pro)",
+            "  [cyan]/verify[/cyan]    Cross-model verification of the last response",
+            "  [cyan]/budget[/cyan]    Configure token budget & efficiency policy",
             "  [cyan]/gui[/cyan]       Launch the Clew GUI window",
             "  [cyan]/help[/cyan]      Show this help",
             "",
@@ -773,6 +791,382 @@ class ClewTUIApp(App):
             f"  Loaded: {', '.join(loaded[:20])}{'...' if len(loaded) > 20 else ''}\n"
             f"  Sample available: {', '.join(available[:20])}{'...' if len(available) > 20 else ''}"
         )
+        self.query_one(InputBox).focus()
+
+    # ── v2.0.1 (G7) — Capability catalog ──────────────────────────
+
+    def _exec_capabilities(self, arg: str) -> None:
+        """Browse the capability catalog and optionally run one.
+
+        Usage:
+            /capabilities                — open browse palette
+            /capabilities <id>           — show capability detail
+            /capabilities <id> k=v ...   — fill placeholders and run
+        """
+        arg = arg.strip()
+        if not arg:
+            self._open_capability_palette()
+            return
+
+        parts = arg.split(None, 1)
+        cap_id = parts[0]
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        cap = self.bridge.get_capability(cap_id)
+        if cap is None:
+            self.query_one(ChatLog).add_system(
+                f"Unknown capability: {cap_id}\n"
+                f"Type /capabilities (no arg) to browse the catalog."
+            )
+            self.query_one(InputBox).focus()
+            return
+
+        # If the capability has no required placeholders, run it now.
+        placeholders = cap.get("placeholders", []) or []
+        required = [p["name"] for p in placeholders if p.get("required", True)]
+
+        if not required and not rest:
+            self._run_capability(cap_id, {})
+            return
+
+        # If the user passed inline values, parse "k=v k2=v2 ..."
+        values: Dict[str, str] = {}
+        if rest:
+            for token in self._split_kv_tokens(rest):
+                if "=" in token:
+                    k, _, v = token.partition("=")
+                    values[k.strip()] = v.strip()
+
+        # Validate
+        missing = [r for r in required if not values.get(r)]
+        if missing:
+            self._show_capability_detail(cap, missing, values)
+            return
+
+        self._run_capability(cap_id, values)
+
+    def _split_kv_tokens(self, s: str) -> List[str]:
+        """Split a string on whitespace, honouring quoted substrings."""
+        import shlex
+        try:
+            return shlex.split(s)
+        except ValueError:
+            return s.split()
+
+    def _open_capability_palette(self) -> None:
+        """Open a palette to browse capabilities, grouped by category."""
+        caps = self.bridge.list_capabilities()
+        if not caps:
+            self.query_one(ChatLog).add_system(
+                "[b]Capability Catalog[/b]\n  No capabilities available."
+            )
+            self.query_one(InputBox).focus()
+            return
+        # Group by category for the palette
+        options: List[Dict[str, Any]] = []
+        for c in caps:
+            builtin_tag = " [dim](builtin)[/dim]" if c.get("builtin") else ""
+            options.append({
+                "id": c["id"],
+                "label": f"[{c.get('category', '?')}] {c.get('name', c['id'])}{builtin_tag}",
+                "desc": c.get("description", "")[:120],
+            })
+        self._open_sub_palette("capability", options)
+
+    def _show_capability_detail(
+        self,
+        cap: Dict[str, Any],
+        missing: List[str],
+        values: Dict[str, str],
+    ) -> None:
+        """Show a capability's body + placeholders and prompt for the missing ones."""
+        chat = self.query_one(ChatLog)
+        lines = [
+            f"[b]Capability: {cap.get('name', cap.get('id'))}[/b]",
+            f"  Category: {cap.get('category', '?')}",
+            f"  {cap.get('description', '')}",
+            "",
+            "[b]Placeholders[/b]",
+        ]
+        for p in cap.get("placeholders", []):
+            req = "required" if p.get("required", True) else "optional"
+            default = p.get("default", "")
+            default_str = f", default: {default}" if default else ""
+            cur = values.get(p["name"], "")
+            cur_str = f"  [green]= {cur}[/green]" if cur else f"  [red]missing ({req}{default_str})[/red]"
+            lines.append(f"  ${p['name']}$ — {p.get('description', '')}{cur_str}")
+        if missing:
+            lines.append("")
+            lines.append(
+                f"[yellow]Fill the missing placeholders and re-run:[/yellow]\n"
+                f"  /capabilities {cap['id']} " +
+                " ".join(f"{m}=..." for m in missing)
+            )
+        chat.add_system("\n".join(lines))
+        self.query_one(InputBox).focus()
+
+    def _run_capability(self, cap_id: str, values: Dict[str, str]) -> None:
+        """Fill the template and run the resulting prompt as a normal turn."""
+        result = self.bridge.fill_capability_template(cap_id, values)
+        chat = self.query_one(ChatLog)
+        if not result.get("ok"):
+            chat.add_error(
+                f"Failed to fill capability template: {result.get('error', 'unknown')}"
+            )
+            self.query_one(InputBox).focus()
+            return
+        prompt = result.get("prompt", "")
+        cap_meta = result.get("capability", {})
+        chat.add_user(
+            f"[capability:{cap_id}] {cap_meta.get('name', cap_id)}\n"
+            f"[dim](filled template — placeholders: {dict(values) or 'none'})[/dim]"
+        )
+        self._last_prompt = prompt
+        self._running = True
+        self._refresh_status("thinking")
+        self._run_turn(prompt)
+
+    # ── v2.0.1 (M1) — Second Opinion ──────────────────────────────
+
+    def _exec_second_opinion(self, arg: str) -> None:
+        """Configure or inspect the Second Opinion feature.
+
+        Usage:
+            /second_opinion                       — show current state
+            /second_opinion on|off                — enable / disable
+            /second_opinion pro on|off            — toggle Clew Pro flag
+            /second_opinion provider <pid> [model]— pick the second model
+            /second_opinion risk low|medium|high  — min risk to trigger
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+        if not arg:
+            cfg = self.bridge.get_second_opinion_config()
+            pro = "ON" if cfg.get("pro_enabled") else "OFF"
+            so = "ON" if cfg.get("enabled") else "OFF"
+            chat.add_system(
+                f"[b]Second Opinion[/b] (Clew Pro feature)\n"
+                f"  Clew Pro:        [b]{pro}[/b]\n"
+                f"  Second Opinion:  [b]{so}[/b]\n"
+                f"  Second provider: {cfg.get('provider_id', 'auto')}\n"
+                f"  Second model:    {cfg.get('model', 'auto')}\n"
+                f"  Min risk level:  {cfg.get('min_risk_level', 'medium')}\n\n"
+                f"  Usage:\n"
+                f"    /second_opinion on|off\n"
+                f"    /second_opinion pro on|off\n"
+                f"    /second_opinion provider <pid> [model]\n"
+                f"    /second_opinion risk low|medium|high"
+            )
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split()
+        sub = parts[0].lower()
+        if sub in ("on", "off", "enable", "disable"):
+            enabled = sub in ("on", "enable")
+            r = self.bridge.set_second_opinion_config(enabled=enabled)
+            if r.get("ok"):
+                state = "ON" if r.get("enabled") else "OFF"
+                chat.add_system(f"Second Opinion: [b]{state}[/b]")
+                if not r.get("pro_enabled"):
+                    chat.add_system(
+                        "[yellow]Note:[/yellow] Clew Pro is OFF. "
+                        "Enable with /second_opinion pro on"
+                    )
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+        elif sub == "pro":
+            if len(parts) < 2:
+                chat.add_system("Usage: /second_opinion pro on|off")
+            else:
+                v = parts[1].lower() in ("on", "1", "true", "yes")
+                r = self.bridge.set_pro_enabled(v)
+                if r.get("ok"):
+                    state = "ON" if r.get("pro") else "OFF"
+                    chat.add_system(f"Clew Pro: [b]{state}[/b]")
+                else:
+                    chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+        elif sub == "provider":
+            if len(parts) < 2:
+                # Show available providers
+                providers = self.bridge.list_second_opinion_providers()
+                chat.add_system(
+                    "[b]Available second-opinion providers[/b]\n" +
+                    "\n".join(
+                        f"  {p.get('id')} — {p.get('label', '')} "
+                        f"(model: {p.get('model', p.get('default_model', '?'))})"
+                        for p in providers[:20]
+                    )
+                )
+            else:
+                pid = parts[1]
+                model = parts[2] if len(parts) > 2 else "auto"
+                r = self.bridge.set_second_opinion_config(provider_id=pid, model=model)
+                if r.get("ok"):
+                    chat.add_system(
+                        f"Second Opinion provider: [b]{r.get('provider_id')}[/b] "
+                        f"model: [dim]{r.get('model')}[/dim]"
+                    )
+                else:
+                    chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+        elif sub in ("risk", "min_risk", "threshold"):
+            if len(parts) < 2:
+                chat.add_system("Usage: /second_opinion risk low|medium|high")
+            else:
+                lvl = parts[1].lower()
+                if lvl not in ("low", "medium", "high"):
+                    chat.add_error(f"Invalid risk level: {lvl}")
+                else:
+                    r = self.bridge.set_second_opinion_config(min_risk_level=lvl)
+                    if r.get("ok"):
+                        chat.add_system(f"Second Opinion min risk: [b]{r.get('min_risk_level')}[/b]")
+                    else:
+                        chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+        else:
+            chat.add_system(
+                f"Unknown subcommand: {sub}\n"
+                f"Usage: /second_opinion [on|off|pro|provider|risk] ..."
+            )
+        self.query_one(InputBox).focus()
+
+    # ── v2.0.1 (G3) — Token budget ────────────────────────────────
+
+    def _exec_budget(self, arg: str) -> None:
+        """Configure or inspect the token budget / efficiency policy.
+
+        Usage:
+            /budget                — show current budget
+            /budget daily <usd>    — set daily USD cap
+            /budget monthly <usd>  — set monthly USD cap
+            /budget per_turn <tok> — max tokens per agentic turn
+            /budget compaction <pct> — auto-compact threshold (50-95)
+            /budget reset          — reset to defaults
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+        if not arg:
+            b = self.bridge.get_token_budget()
+            if not b.get("ok"):
+                chat.add_error(f"Failed: {b.get('error', 'unknown')}")
+                self.query_one(InputBox).focus()
+                return
+            chat.add_system(
+                f"[b]Token Budget & Efficiency[/b]\n"
+                f"  Daily cap:        ${b.get('daily_usd', 0):.2f}\n"
+                f"  Monthly cap:      ${b.get('monthly_usd', 0):.2f}\n"
+                f"  Max tokens/turn:  {b.get('max_tokens_per_turn', 0):,}\n"
+                f"  Max iterations:   {b.get('max_iterations', 0)}\n"
+                f"  Auto-compact at:  {b.get('compaction_threshold_pct', 85)}%\n"
+                f"  Prompt caching:   {'ON' if b.get('prompt_caching') else 'OFF'}\n"
+                f"  Predictable mode: {'ON' if b.get('predictable_mode') else 'OFF'}\n\n"
+                f"  Usage this month: ${b.get('month_cost', 0):.4f} / "
+                f"${b.get('monthly_usd', 0):.2f} "
+                f"({b.get('month_used_pct', 0)}%)\n"
+                f"  Today: ${b.get('day_cost', 0):.4f}\n\n"
+                f"  Commands:\n"
+                f"    /budget daily|monthly <usd>\n"
+                f"    /budget per_turn <tokens>\n"
+                f"    /budget iterations <n>\n"
+                f"    /budget compaction <50-95>\n"
+                f"    /budget caching on|off\n"
+                f"    /budget predictable on|off\n"
+                f"    /budget reset"
+            )
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split()
+        sub = parts[0].lower()
+        try:
+            if sub == "daily":
+                self.bridge.set_token_budget(daily_usd=float(parts[1]))
+            elif sub == "monthly":
+                self.bridge.set_token_budget(monthly_usd=float(parts[1]))
+            elif sub in ("per_turn", "per-turn"):
+                self.bridge.set_token_budget(max_tokens_per_turn=int(parts[1]))
+            elif sub == "iterations":
+                self.bridge.set_token_budget(max_iterations=int(parts[1]))
+            elif sub == "compaction":
+                pct = max(50, min(95, int(parts[1])))
+                self.bridge.set_token_budget(compaction_threshold_pct=pct)
+            elif sub == "caching":
+                self.bridge.set_token_budget(
+                    prompt_caching=(parts[1].lower() in ("on", "1", "true", "yes"))
+                )
+            elif sub == "predictable":
+                self.bridge.set_token_budget(
+                    predictable_mode=(parts[1].lower() in ("on", "1", "true", "yes"))
+                )
+            elif sub == "reset":
+                self.bridge.reset_token_budget()
+            else:
+                chat.add_system(f"Unknown subcommand: {sub}")
+                self.query_one(InputBox).focus()
+                return
+            chat.add_system(f"Budget updated: [b]{sub}[/b]")
+        except (IndexError, ValueError) as e:
+            chat.add_error(f"Bad argument: {e}")
+        except Exception as e:
+            chat.add_error(f"Failed: {e}")
+        self.query_one(InputBox).focus()
+
+    # ── v2.0.1 (G4) — Cross-model verification ────────────────────
+
+    def _exec_verify(self, arg: str) -> None:
+        """Verify the last assistant response with a different model.
+
+        Usage:
+            /verify                          — auto-pick a cross-family verifier
+            /verify <provider_id>            — use a specific provider
+            /verify <provider_id> <model>    — use a specific provider + model
+        """
+        if self._running:
+            self.query_one(ChatLog).add_system(
+                "Wait for the current turn to finish before running /verify."
+            )
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.strip().split()
+        v_pid = parts[0] if parts else None
+        v_model = parts[1] if len(parts) > 1 else None
+
+        chat = self.query_one(ChatLog)
+        chat.add_system(
+            "[dim]Running cross-model verification...[/dim]"
+        )
+        self._refresh_status("thinking")
+        self._run_verification(v_pid, v_model)
+
+    @work(thread=True, exclusive=True)
+    def _run_verification(
+        self,
+        v_pid: Optional[str],
+        v_model: Optional[str],
+    ) -> None:
+        try:
+            result = self.bridge.verify_last_response(
+                verifier_provider_id=v_pid,
+                verifier_model=v_model,
+            )
+            self.call_from_thread(self._on_verify_done, result)
+        except Exception as e:
+            self.call_from_thread(self._on_turn_error, str(e))
+
+    def _on_verify_done(self, result: Dict[str, Any]) -> None:
+        chat = self.query_one(ChatLog)
+        self._refresh_status("idle")
+        if not result.get("ok"):
+            chat.add_error(
+                f"Verification failed: {result.get('error', 'unknown')}"
+            )
+            self.query_one(InputBox).focus()
+            return
+        # Show the verification modal
+        self.push_screen(VerificationModal(result), lambda _: self._after_verify_modal())
+
+    def _after_verify_modal(self) -> None:
+        """Called after the verification modal is dismissed."""
         self.query_one(InputBox).focus()
 
     # --------------------------------------------------------------- worker

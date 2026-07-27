@@ -686,3 +686,424 @@ class ClewBridge:
         except Exception as e:
             return {"loaded": [], "available": [], "prompt_chars_saved": 0,
                     "error": str(e)}
+
+    # ── v2.0.1 (G7) — Capability catalog ───────────────────────────
+
+    def list_capabilities(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Browse the capability catalog (built-in + user + project).
+
+        Returns each capability's metadata (no body). Group by category
+        in the UI. Use ``get_capability(id)`` to fetch the full body
+        before filling placeholders.
+        """
+        try:
+            from clew.capability_catalog import get_catalog
+            catalog = get_catalog()
+            if self.workspace and not catalog._project_root:
+                catalog.set_project_root(self.workspace)
+            return catalog.list_as_dicts(category=category, include_body=False)
+        except Exception as e:
+            return []
+
+    def list_capability_categories(self) -> List[str]:
+        """Distinct categories present in the catalog (for palette grouping)."""
+        try:
+            from clew.capability_catalog import get_catalog
+            catalog = get_catalog()
+            return catalog.list_categories()
+        except Exception:
+            return []
+
+    def get_capability(self, cap_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch the full capability (with body) by id."""
+        try:
+            from clew.capability_catalog import get_catalog
+            catalog = get_catalog()
+            cap = catalog.get(cap_id)
+            if cap is None:
+                return None
+            return cap.to_dict(include_body=True)
+        except Exception:
+            return None
+
+    def fill_capability_template(
+        self,
+        cap_id: str,
+        values: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """Substitute $placeholder$ values in the capability body.
+
+        Returns {ok, prompt, capability, missing} on success,
+        {ok=False, error, missing} if required placeholders are absent.
+        """
+        try:
+            from clew.capability_catalog import get_catalog
+            catalog = get_catalog()
+            return catalog.fill_template(cap_id, values)
+        except Exception as e:
+            return {"ok": False, "error": str(e), "missing": []}
+
+    # ── v2.0.1 (M1) — Second Opinion (Pro-gated) ───────────────────
+
+    def is_pro_enabled(self) -> bool:
+        """Return True if the ``clew_pro`` flag is on."""
+        try:
+            from clew.second_opinion import is_pro_enabled as _is_pro
+            return _is_pro()
+        except Exception:
+            return False
+
+    def set_pro_enabled(self, enabled: bool) -> Dict[str, Any]:
+        """Toggle the ``clew_pro`` flag (env var takes priority on read)."""
+        try:
+            from clew.second_opinion import set_pro_enabled as _set_pro
+            _set_pro(enabled)
+            return {"ok": True, "pro": enabled}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get_second_opinion_config(self) -> Dict[str, Any]:
+        """Return the current Second Opinion configuration."""
+        try:
+            from clew.second_opinion import get_second_opinion_config as _get
+            cfg = _get()
+            return {
+                "ok": True,
+                "enabled": cfg.enabled,
+                "provider_id": cfg.provider_id,
+                "model": cfg.model,
+                "min_risk_level": cfg.min_risk_level,
+                "pro_enabled": self.is_pro_enabled(),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_second_opinion_config(
+        self,
+        *,
+        enabled: Optional[bool] = None,
+        provider_id: Optional[str] = None,
+        model: Optional[str] = None,
+        min_risk_level: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Update the Second Opinion configuration. Only non-None
+        fields are changed; the rest are preserved."""
+        try:
+            from clew.second_opinion import (
+                get_second_opinion_config as _get,
+                set_second_opinion_config as _set,
+                SecondOpinionConfig,
+            )
+            cur = _get()
+            new_cfg = SecondOpinionConfig(
+                enabled=cur.enabled if enabled is None else bool(enabled),
+                provider_id=cur.provider_id if provider_id is None else str(provider_id),
+                model=cur.model if model is None else str(model),
+                min_risk_level=(cur.min_risk_level if min_risk_level is None
+                                else str(min_risk_level)),
+            )
+            _set(new_cfg)
+            return {
+                "ok": True,
+                "enabled": new_cfg.enabled,
+                "provider_id": new_cfg.provider_id,
+                "model": new_cfg.model,
+                "min_risk_level": new_cfg.min_risk_level,
+                "pro_enabled": self.is_pro_enabled(),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def run_second_opinion(
+        self,
+        tool_name: str,
+        args: Dict[str, Any],
+        risk_level: str,
+        risk_reasons: List[str],
+        recent_context: str = "",
+    ) -> Dict[str, Any]:
+        """Invoke a second model to review a proposed tool call.
+
+        Returns the verdict dict (verdict, rationale, suggested_args,
+        provider_id, model, elapsed_ms, error). Always returns APPROVE
+        on any error so the feature fails OPEN.
+
+        Requires Pro to be enabled. If Pro is off, returns a verdict
+        with ``error='pro_required'`` so the UI can prompt the user.
+        """
+        try:
+            from clew.second_opinion import (
+                get_second_opinion_config,
+                should_run_second_opinion,
+                review_with_second_model,
+                is_pro_enabled,
+            )
+            if not is_pro_enabled():
+                return {
+                    "verdict": "APPROVE",
+                    "rationale": "Second Opinion requires Clew Pro.",
+                    "error": "pro_required",
+                    "provider_id": "",
+                    "model": "",
+                    "elapsed_ms": 0.0,
+                }
+            cfg = get_second_opinion_config()
+            # Even if the user disabled it, the explicit run_second_opinion()
+            # call from the UI should still go through — we only honour the
+            # auto-trigger gating in should_run_second_opinion().
+            if self._registry is None:
+                self._registry = self._build_registry()
+            active_pid = self._registry.active_id or "ollama"
+            verdict = review_with_second_model(
+                config=cfg,
+                tool_name=tool_name,
+                args=args,
+                risk_level=risk_level,
+                risk_reasons=risk_reasons,
+                recent_context=recent_context,
+                provider_registry=self._registry,
+                active_provider_id=active_pid,
+            )
+            return verdict.to_dict()
+        except Exception as e:
+            return {
+                "verdict": "APPROVE",
+                "rationale": f"Second Opinion error: {e}",
+                "error": str(e),
+                "provider_id": "",
+                "model": "",
+                "elapsed_ms": 0.0,
+            }
+
+    def list_second_opinion_providers(self) -> List[Dict[str, Any]]:
+        """Return providers eligible to be the 'second' model.
+
+        Same shape as ``list_providers()`` but excludes the active
+        provider (a second opinion from the same provider is pointless).
+        """
+        try:
+            all_p = self.list_providers()
+            active_pid = None
+            for p in all_p:
+                if p.get("active"):
+                    active_pid = p.get("id")
+                    break
+            return [p for p in all_p if p.get("id") != active_pid]
+        except Exception:
+            return []
+
+    # ── v2.0.1 (G3) — Token budget / efficiency ────────────────────
+
+    def get_token_budget(self) -> Dict[str, Any]:
+        """Return the current token budget + live usage against the caps."""
+        try:
+            from clew.token_budget import get_token_budget, check_budget
+            budget = get_token_budget()
+            # Run the check against the live tracker if available
+            check = check_budget(budget=budget, token_tracker=self._tracker)
+            return {
+                "ok": True,
+                **budget.to_dict(),
+                "day_cost": check.daily_used,
+                "month_cost": check.monthly_used,
+                "day_used_pct": check.day_used_pct,
+                "month_used_pct": check.month_used_pct,
+                "exceeded": check.exceeded,
+                "reason": check.reason,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_token_budget(
+        self,
+        *,
+        daily_usd: Optional[float] = None,
+        monthly_usd: Optional[float] = None,
+        max_tokens_per_turn: Optional[int] = None,
+        max_iterations: Optional[int] = None,
+        compaction_threshold_pct: Optional[int] = None,
+        prompt_caching: Optional[bool] = None,
+        predictable_mode: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Update token budget fields. Only non-None fields change.
+
+        Forces an agent rebuild on next turn so settings take effect.
+        """
+        try:
+            from clew.token_budget import set_token_budget as _set
+            new_budget = _set(
+                daily_usd=daily_usd,
+                monthly_usd=monthly_usd,
+                max_tokens_per_turn=max_tokens_per_turn,
+                max_iterations=max_iterations,
+                compaction_threshold_pct=compaction_threshold_pct,
+                prompt_caching=prompt_caching,
+                predictable_mode=predictable_mode,
+            )
+            # Force agent rebuild so max_iterations / max_tokens take effect
+            self._agent = None
+            return {"ok": True, **new_budget.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def reset_token_budget(self) -> Dict[str, Any]:
+        """Restore the default token budget."""
+        try:
+            from clew.token_budget import reset_token_budget as _reset
+            budget = _reset()
+            self._agent = None
+            return {"ok": True, **budget.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def check_budget(self) -> Dict[str, Any]:
+        """Convenience: check whether the budget has been exceeded.
+
+        Returns {ok, exceeded, reason, daily_used, monthly_used, ...}.
+        """
+        try:
+            from clew.token_budget import get_token_budget, check_budget
+            budget = get_token_budget()
+            check = check_budget(budget=budget, token_tracker=self._tracker)
+            return {"ok": True, **check.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.0.1 (G4) — Cross-model verification ─────────────────────
+
+    def verify_last_response(
+        self,
+        verifier_provider_id: Optional[str] = None,
+        verifier_model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Run a cross-model verification of the most recent agent output.
+
+        Picks a verifier from a different model family than the active
+        provider (unless the user pinned one), then asks it to flag
+        correctness / safety / completeness issues in the last response.
+
+        Returns {ok, verification, verifier_provider, verifier_model,
+        elapsed_ms, error}.
+        """
+        try:
+            from clew.second_opinion import (
+                is_pro_enabled, get_second_opinion_config,
+                resolve_second_provider,
+            )
+            from clew.providers import ProviderMessage
+
+            # Capture the last response BEFORE any UI work.
+            last_output = ""
+            if self._agent is not None:
+                try:
+                    msgs = self._agent.memory.messages
+                    for m in reversed(msgs):
+                        if getattr(m, "role", "") == "assistant" and getattr(m, "content", ""):
+                            last_output = m.content
+                            break
+                except Exception:
+                    pass
+
+            if not last_output:
+                return {
+                    "ok": False,
+                    "error": "No prior assistant response to verify.",
+                }
+
+            if self._registry is None:
+                self._registry = self._build_registry()
+
+            active_pid = self._registry.active_id or "ollama"
+
+            # Resolve verifier
+            if verifier_provider_id:
+                v_pid = verifier_provider_id
+                v_model = verifier_model or ""
+            else:
+                cfg = get_second_opinion_config()
+                v_pid, v_model = resolve_second_provider(active_pid, cfg)
+
+            if not v_model:
+                try:
+                    cls = self._registry._classes.get(v_pid)
+                    v_model = cls.default_model if cls else ""
+                except Exception:
+                    v_model = ""
+
+            provider = self._registry.get(v_pid)
+            if not provider.is_loaded:
+                provider.load()
+
+            # Capture the user's last prompt for context
+            last_user = ""
+            if self._agent is not None:
+                try:
+                    for m in reversed(self._agent.memory.messages):
+                        if getattr(m, "role", "") == "user" and getattr(m, "content", ""):
+                            last_user = m.content
+                            break
+                except Exception:
+                    pass
+
+            system_prompt = (
+                "You are an independent verifier reviewing another AI agent's response.\n"
+                "The user asked a question; another model produced the answer below.\n"
+                "Your job is to flag correctness, safety, and completeness issues — "
+                "NOT to rewrite the answer.\n\n"
+                "Return STRICT JSON:\n"
+                "{\n"
+                "  \"overall\": \"PASS\" | \"WARN\" | \"FAIL\",\n"
+                "  \"correctness\": \"PASS\" | \"WARN\" | \"FAIL\",\n"
+                "  \"safety\":      \"PASS\" | \"WARN\" | \"FAIL\",\n"
+                "  \"completeness\": \"PASS\" | \"WARN\" | \"FAIL\",\n"
+                "  \"issues\": [\"...\", ...],\n"
+                "  \"suggestions\": [\"...\", ...],\n"
+                "  \"summary\": \"<one or two sentences>\"\n"
+                "}\n"
+                "If the answer is fine, return PASS with empty issues.\n"
+            )
+            user_prompt = (
+                f"## User's request\n{last_user[:2000]}\n\n"
+                f"## Agent's response to verify\n{last_output[:6000]}\n\n"
+                "Return your verdict JSON now."
+            )
+            messages = [
+                ProviderMessage(role="system", content=system_prompt),
+                ProviderMessage(role="user", content=user_prompt),
+            ]
+
+            import time as _t
+            t0 = _t.time()
+            resp = provider.generate(messages, model=v_model)
+            raw = getattr(resp, "text", "") or ""
+            elapsed = (_t.time() - t0) * 1000
+
+            # Parse JSON
+            import json as _json
+            import re as _re
+            m = _re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, _re.DOTALL)
+            if m:
+                raw = m.group(1)
+            else:
+                m = _re.search(r"\{.*\}", raw, _re.DOTALL)
+                if m:
+                    raw = m.group(0)
+            try:
+                verification = _json.loads(raw)
+            except Exception:
+                verification = {
+                    "overall": "WARN",
+                    "raw": raw[:2000],
+                    "summary": "Verifier response was not valid JSON; raw text included.",
+                }
+
+            return {
+                "ok": True,
+                "verification": verification,
+                "verifier_provider": v_pid,
+                "verifier_model": v_model,
+                "elapsed_ms": round(elapsed, 1),
+                "original_chars": len(last_output),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}

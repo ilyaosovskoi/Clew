@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Language Preference
+- **Dialogue with user**: Russian (Русский)
+- **Code and comments**: English
+
 ## Build & Run
 
 - **Install Python deps**: `pip install -e .`
@@ -75,9 +79,58 @@ Key reference documents in `docs/`:
 | `REFACTORING.md` | v2.0 refactoring decisions and rationale |
 | `guardian-implementation-status.md` | Guardian feature development tracker |
 
+## Loop Engineering Infrastructure
+
+**Always read these files when starting any new task** — they define the loop engineering process used in this project:
+
+| File | Purpose |
+|------|---------|
+| `Loops_Library.md` | Catalog of 10 reusable loop patterns (BUG, FEAT, REFACTOR, PERF, SEC, DEBT, INCIDENT, EXPERIMENT, DEPUP, DOCS) |
+| `Loop_Engineering_Guide.md` | Quick start, workflows, file map, GitHub integration, anti-patterns |
+| `Success_Criteria_Template.md` | Template for defining measurable success criteria at loop kickoff |
+| `Learnings.md` | Institutional knowledge base with validated learnings from past loops |
+| `Weekly_System_Review.md` | Weekly review template for system health, metrics, incidents, architecture |
+
+**Directory structure** (created automatically):
+- `loops/active/` — Current loop files (one per loop)
+- `loops/archive/` — Closed loops (immutable)
+- `learnings/` — Individual learning entries
+- `reviews/` — Weekly review history
+
+**Workflow reminder**: Before implementing, check `Loops_Library.md` to pick the right loop type, copy `Success_Criteria_Template.md` to `loops/active/`, fill criteria, get sign-off, then execute.
+
+## Active Goals (Monetization & Growth Foundation)
+
+**Monetization** — deferred until post-v2.0 stabilization, but foundation work starts now:
+
+| Priority | Goal | Effort | Notes |
+|----------|------|--------|-------|
+| **M1** | **Cross-model "Second Opinion" before commit** ✅ | Low-Med | Guardian + 16 providers ready; 1 extra API call + UI toggle. Best effort/value ratio per `clew_monetization_strategy_v2.md` #16. Gate behind `clew_pro` flag. Implemented in `clew/second_opinion.py` + `clew_tui/bridge.py` + `clew/web_bridge/bridge.py`. |
+| **M2** | **Smart cost-aware provider routing** | Medium | Build on `registry.py` + `token_tracker.py` data. Task complexity classifier → model tier catalog. |
+| **M3** | **Team spend dashboard** | Low-Med | Aggregate `token_history.jsonl` by org. Useful for Enterprise gate. |
+| **M4** | **Office ↔ Cloud accounts (OAuth: SharePoint/Drive/OneDrive)** | Medium | `office_worker.py` is local-only. OAuth infra + token storage = SaaS layer. |
+| **M5** | **Audit trail export (hash-chain + signature)** | Medium | `activity_log.py` + `export_json()` exist. Add integrity for compliance. |
+
+**Growth / User Acquisition Features** (from `gaps_ai_coding_agents.md` analysis):
+
+| Priority | Feature | User Pain Addressed | Target Group |
+|----------|---------|---------------------|--------------|
+| **G1** | **User-custom providers (TUI + GUI)** ✅ | "Нетехнические пользователи не знают, как добавить свой ключ/провайдер; power users хотят свои endpoints" | Все группы |
+| **G2** | **Add Nvidia NIM provider** ✅ | "Хочу бегать локальные модели через NIM без настройки Ollama" | Power users, Enterprise |
+| **G3** | **Predictable limits / token efficiency** ✅ | "Лимиты ломают workflow, тратится 4x токенов vs Codex" | Опытные разработчики |
+| **G4** | **Cross-model verification UI** (extends M1) ✅ | "Модель не может проверить себя объективно" | Опытные разработчики, Enterprise |
+| **G5** | **Agent identity + tool-call audit** | "Нет видимости, какой агент что вызвал" | Enterprise/Безопасность |
+| **G6** | **Post-task "bridge" (CMS/editable handoff)** | "После сдачи задачи нет интерфейса для правок без разработчика" | Vibe coders / Нетехнические |
+| **G7** | **Capability catalog / templates** ✅ | "Не знаю, что можно попросить у агента" | Vibe coders / Нетехнические |
+| **G8** | **Polished TUI/GUI, fast bug fixes** | "Долгоживущие баги интерфейса = неуважение" | Все группы |
+
+**Provider System Enhancement Goals:** ✅ **COMPLETED**
+- **User-custom providers**: Config file (`~/.clew/providers.yaml`) + dynamic class loading from `~/.clew/providers/` (plugin-style). Auto-register in `ProviderRegistry` and `AutoRouter`. Works in both TUI (via `ClewBridge.list_providers()`/`set_provider()`) and GUI (via web bridge `list_providers`/`set_provider` slots).
+- **Nvidia NIM**: Added `NvidiaNIMProvider` to `clew/providers/` implementing OpenAI-compatible chat completions. Supports `base_url` + `api_key` config. Registered by default.
+
 Remove `FIXES.md` — all bugs described there were already fixed, and the file was outdated.
 
-## Smoke Test Findings (2025-07-25) — COMPLETED
+## Smoke Test Findings (2026-07-25) — COMPLETED
 
 ### Что сделано
 1. Изучил архитектуру TUI — `ClewBridge` как граница с core, набор виджетов, Command Palette
@@ -105,7 +158,7 @@ Remove `FIXES.md` — all bugs described there were already fixed, and the file 
 - Модалки (Approve/Guardian)
 - GUI launch (Ctrl+G)
 
-## Issue #8 Research (2025-07-25) — COMPLETED
+## Issue #8 Research (2026-07-25) — COMPLETED
 
 ### Progressive Tool Disclosure architecture
 
@@ -160,7 +213,7 @@ Added `search_tools` meta-tool that allows LLM to search TOOL_CATALOG by keyword
 Priority-ordered objectives for the `feature/v2.0.0-version` branch:
 
 ### 1. Smoke test the TUI
-Run `clew_tui`, test all features end-to-end, document all crashes, freezes, or misbehavior in GitHub Issues. — **DONE (2025-07-25)**
+Run `clew_tui`, test all features end-to-end, document all crashes, freezes, or misbehavior in GitHub Issues. — **DONE (2026-07-25)**
 
 ### 2. Fix TUI issues + close open Issues
 Work through GitHub Issues #3–#9 to bring Clew's agent quality to parity with Codex/Claude Code:
@@ -172,13 +225,29 @@ Work through GitHub Issues #3–#9 to bring Clew's agent quality to parity with 
 - Tool search meta-tool (#8) — **DONE** (see section above)
 - Request serialization queues (#9) — **DONE** (`clew/request_queue.py` with `RequestQueue`, `QueueRegistry`, `wrap_provider` + tests)
 
-### 3. User-custom providers
+### 3. User-custom providers ✅ — COMPLETED (2026-07-26)
 Add a mechanism for users to register their own AI provider without modifying source code. Should support:
 - OpenAPI-compatible endpoints via config file
 - Custom provider class loading from `~/.clew/providers/` (like the plugin system)
 - Auto-registration in ProviderRegistry and AutoRouter
 
-### 4. More agent tools
+**Implemented:**
+- `clew/providers/custom_providers.py` — Complete implementation with YAML config, dynamic class creation, file/class loading, auto-discovery
+- `clew/providers/registry.py` — Updated `get_registry()` to call `register_custom_providers()` and added `reload_registry()` for hot-reload
+- `clew/providers/__init__.py` — Exported custom providers functions
+- Example config at `~/.clew/providers.yaml.example`
+
+### 4. Nvidia NIM provider ✅ — COMPLETED (2025-07-26)
+Add Nvidia NIM provider as a built-in option.
+
+**Implemented:**
+- `clew/providers/nvidia_nim.py` — `NvidiaNIMProvider` extending `OpenAICompatProvider`
+- API base: `https://integrate.api.nvidia.com/v1`
+- Default model: `meta/llama-3.1-8b-instruct`
+- Auth via `NVIDIA_API_KEY` environment variable
+- Registered by default in `registry.py` and exported in `__init__.py`
+
+### 5. More agent tools
 Add useful tools beyond the current set (read_file, write_file, str_replace, execute_command, search_project, git_*, etc.):
 - `web_fetch` — fetch and summarize URL content (like Claude Code's WebFetch)
 - `web_search` — search the web (like Claude Code's WebSearch)
@@ -216,7 +285,51 @@ Redesign AutoRouter to automatically manage provider/model selection based on bu
 - Evaluator prompt in `clew/agent/templates/` — injected into system prompt of a lightweight model
 - Quota-aware routing — reads from existing `clew/quota.py` and `clew/token_tracker.py`
 
-## Issue #3–#9 Implementation Notes (2025-07-25)
+## G1 + G2: User-Custom Providers + Nvidia NIM (2026-07-26) — COMPLETED
+
+**G1 — User-custom providers mechanism:**
+- **`clew/providers/custom_providers.py`** — Complete implementation:
+  - YAML config loading from `~/.clew/providers.yaml` with three definition modes:
+    1. **OpenAI-compatible (dynamic, no code)** — `type: "openai_compatible"` with `api_base`, `env_var`, `capabilities`, `context_window`, etc.
+    2. **Python class import** — `class_path: "my_package.providers.MyProvider"`
+    3. **Python file load** — `file_path: "~/.clew/providers/my_provider.py"`
+  - Dynamic provider class creation for OpenAI-compatible endpoints (no Python code needed)
+  - Auto-discovery from `~/.clew/providers/` directory (plugin-style)
+  - `register_custom_providers(registry)` — called automatically on registry initialization
+- **`clew/providers/registry.py`** — Updated `get_registry()` to call `register_custom_providers()` and added `reload_registry()` for hot-reload without restart
+- **`clew/providers/__init__.py`** — Exported custom providers functions
+- **Example config** at `~/.clew/providers.yaml.example` with documentation
+
+**G2 — Nvidia NIM provider:**
+- **`clew/providers/nvidia_nim.py`** — `NvidiaNIMProvider` extending `OpenAICompatProvider`
+  - API base: `https://integrate.api.nvidia.com/v1`
+  - Default model: `meta/llama-3.1-8b-instruct`
+  - Auth via `NVIDIA_API_KEY` environment variable
+  - Capabilities: chat, streaming, tool_calling, system_prompt, skills
+- **`clew/providers/registry.py`** — Added import and registration in `register_default()`
+- **`clew/providers/__init__.py`** — Exported `NvidiaNIMProvider`
+
+**Frontend Integration (both TUI and GUI):**
+- **TUI** (`clew_tui/app.py`): `_open_model_palette()` calls `bridge.list_providers()` — automatically includes custom providers
+- **TUI** (`clew_tui/bridge.py`): `list_providers()` and `set_provider()` work with all registered providers including custom ones
+- **GUI** (`clew/web_bridge/bridge.py`): `list_providers()` and `set_provider()` Slot methods automatically include custom providers from registry
+
+**Verification:**
+- Both providers appear in `registry.list_providers()` ✓
+- TUI bridge `list_providers()` returns both ✓
+- GUI bridge `list_providers()` returns both ✓
+- TUI bridge `set_provider('nvidia_nim')` works ✓
+- TUI bridge `set_provider('my_local_llm')` works ✓
+- GUI bridge `set_provider('nvidia_nim')` works ✓
+- GUI bridge `set_provider('my_local_llm')` works ✓
+- Registry `reload_registry()` hot-reload works ✓
+- GUI bridge `list_providers()` returns both ✓
+- Provider switching works in both bridges ✓
+- Registry hot-reload via `reload_registry()` works ✓
+- All 144 tests pass ✓
+- TUI launches successfully ✓
+
+## Issue #3–#9 Implementation Notes (2026-07-25)
 
 ### Issue #3 — Guardian tests
 **Files**: `clew/agent/guardian.py`, `clew/agent/test_guardian.py`
@@ -297,7 +410,7 @@ Per-provider `RequestQueue` with:
 `QueueRegistry` is a singleton keyed by `provider_id`, so each
 provider gets its own queue.
 
-## Refactoring Fix (2025-07-26)
+## Refactoring Fix (2026-07-26)
 
 Fixed the `clew/agent_runtime/` and `clew/web_bridge/` package split that was introduced in the v2.0.0 refactoring but had import bugs:
 
@@ -310,3 +423,202 @@ Fixed the `clew/agent_runtime/` and `clew/web_bridge/` package split that was in
 4. `clew/agent_runtime/runtime.py` — added missing imports: `ProviderRegistry`, `get_project_context`, `get_context_manager`, `EventCallback` type alias, `Tuple`
 
 All 144 tests now pass and all imports work correctly.
+
+## v2.0.1 (2026-07-27) — G7, M1, G3, G4 ✅ COMPLETED
+
+Four new features shipped in this update, all wired into both TUI and
+GUI frontends with `/slash-command` access in the TUI. Each lives in
+its own module so it can be enabled / disabled / extended without
+touching the others.
+
+### G7 — Capability catalog / templates
+
+**Goal:** "I don't know what I can ask the agent to do." Non-technical
+users land in an empty chat and don't know how to phrase a request.
+
+**Solution:** a curated catalog of pre-built capability templates
+(`write-new-feature`, `fix-bug`, `refactor-extract-function`,
+`write-unit-tests`, `dockerize-project`, `onboard-to-codebase`, etc.)
+that users browse via `/capabilities` and run with placeholder
+substitution: `/capabilities write-new-feature language=python
+feature="double a number" file_path=doubler.py`.
+
+**Files:**
+- `clew/capability_catalog.py` — new module (540+ lines). Built-in
+  catalog of 20 templates across 9 categories (code, refactor, test,
+  debug, document, review, deploy, office, learn). Supports the same
+  front-matter-driven file format as `skill_loader.py` so users can
+  add their own at `~/.clew/capabilities/*.md` or
+  `<project>/.clew/capabilities/*.md`. Project-level overrides
+  user-global overrides built-in (keyed by id).
+- `clew_tui/bridge.py` — added `list_capabilities()`,
+  `get_capability()`, `fill_capability_template()`.
+- `clew_tui/app.py` — added `/capabilities` slash-command with
+  browse-palette + inline `k=v` placeholder fill + detail view for
+  missing required placeholders.
+- `clew/web_bridge/bridge.py` — added `@Slot` versions of the same
+  methods (`list_capabilities`, `get_capability`,
+  `fill_capability_template`) for the GUI frontend.
+
+**Design decisions:**
+- Placeholders use `$name$` (dollar-delimited) instead of `$name` to
+  avoid colliding with shell-variable syntax inside bash code blocks.
+- Auto-discovery: if a template body uses `$foo$` but `foo` isn't
+  declared in the front-matter, it's auto-added as a required
+  placeholder — so a minimal template (just front-matter + body) works.
+- Built-ins ship with Clew but can be overridden by user-global and
+  project-level files of the same id — same priority scheme as
+  `skill_loader.py`.
+
+### M1 — Cross-model "Second Opinion" (Pro-gated)
+
+**Goal:** Before the agent commits to a risky action, ask a DIFFERENT
+model for an independent verdict. The same model reviewing itself is
+useless — it just confirms its own reasoning.
+
+**Solution:** `clew/second_opinion.py` calls a different provider family
+than the active one (Anthropic if OpenAI is active, Groq if Ollama is
+active, etc.) and returns a JSON verdict: APPROVE / REJECT / MODIFY
+with rationale. Gated behind `clew_pro` flag (env var `CLEW_PRO=1` or
+`clew_pro: true` in `~/.clew/config.json`).
+
+**Files:**
+- `clew/second_opinion.py` — new module (320+ lines). Cross-family
+  default table picks a sensible second model automatically. Config
+  persistence via `~/.clew/config.json` under `second_opinion` key.
+  Always fails OPEN: any error in the second-opinion path returns
+  `APPROVE` so the feature never blocks the user because of a bug.
+- `clew_tui/bridge.py` — added `is_pro_enabled()`, `set_pro_enabled()`,
+  `get_second_opinion_config()`, `set_second_opinion_config()`,
+  `run_second_opinion()`, `list_second_opinion_providers()`.
+- `clew_tui/app.py` — added `/second_opinion` slash-command with
+  subcommands: `on|off`, `pro on|off`, `provider <pid> [model]`,
+  `risk low|medium|high`.
+- `clew/web_bridge/bridge.py` — added `@Slot` versions of all the
+  above for the GUI frontend.
+
+**Design decisions:**
+- Separate from `guardian.py` because: (1) Guardian is rule-based risk
+  scoring + optional SAME-provider LLM review; Second Opinion is
+  ALWAYS cross-model. (2) Second Opinion is Pro-gated; Guardian isn't.
+  (3) The two features compose: Guardian flags risk, Second Opinion
+  chimes in with a different model's take.
+- Verdict schema mirrors Guardian's (APPROVE/REJECT/MODIFY + rationale
+  + suggested_args) so the existing `_confirm_callback` path can route
+  Second Opinion verdicts through the same Guardian modal UI.
+
+### G3 — Predictable limits / token efficiency
+
+**Goal:** "Limits break my workflow, and I'm burning 4x tokens vs
+Codex." Token usage was unpredictable because of adaptive behaviours
+(adaptive compaction, dynamic tool catalog, no hard caps).
+
+**Solution:** `clew/token_budget.py` exposes four orthogonal knobs:
+hard cost caps (daily_usd, monthly_usd), per-turn efficiency knobs
+(max_tokens_per_turn, max_iterations, compaction_threshold_pct), a
+predictable-mode flag (disables adaptive behaviours for
+deterministic token usage), and a prompt-caching flag (marks stable
+prompt parts as cacheable for providers that support it).
+
+**Files:**
+- `clew/token_budget.py` — new module (270+ lines). Config under
+  `~/.clew/config.json` key `token_budget`. `check_budget()` is called
+  by `AgentRuntime._generate_with_retry()` BEFORE every LLM call — if
+  the cap is blown, the runtime short-circuits with a friendly error
+  instead of letting the provider fail with a confusing 429.
+- `clew/agent_runtime/runtime.py` — wired `check_budget()` call into
+  `_generate_with_retry()` so the cap is enforced on every LLM call,
+  not just agent-loop iterations.
+- `clew_tui/bridge.py` — added `get_token_budget()`,
+  `set_token_budget()`, `reset_token_budget()`, `check_budget()`.
+  Force agent rebuild after `set_token_budget()` so `max_iterations`
+  / `max_tokens_per_turn` take effect on the next turn.
+- `clew_tui/app.py` — added `/budget` slash-command with subcommands:
+  `daily|monthly <usd>`, `per_turn <tokens>`, `iterations <n>`,
+  `compaction <50-95>`, `caching on|off`, `predictable on|off`,
+  `reset`. The bare `/budget` command shows live usage against the
+  caps (today / month / percentage).
+- `clew/web_bridge/bridge.py` — added `@Slot` versions:
+  `get_token_budget`, `set_token_budget` (JSON-arg), `reset_token_budget`,
+  `check_budget`.
+
+**Design decisions:**
+- `predictable_mode` adds a 5% hysteresis band in normal mode (so the
+  runtime doesn't re-compact at 86% right after compacting at 85%),
+  but is a hard cutoff in predictable mode — every turn costs the
+  same tokens.
+- `check_budget()` reads the raw entries list with the tracker's lock
+  held, so the cost calculation is consistent even if `record()` is
+  happening concurrently.
+- Per-turn output cap (`max_tokens_per_turn`) is passed to the provider
+  via `get_max_tokens_for_provider()` so the model stops generating
+  runaway text instead of always using the provider's 4096 default.
+
+### G4 — Cross-model verification UI (extends M1)
+
+**Goal:** "A model can't verify itself objectively." M1 covers
+per-action second opinion BEFORE commit. G4 covers full-response
+verification AFTER the agent answers — useful for catching
+hallucinations, missing edge cases, or security issues the primary
+model glossed over.
+
+**Solution:** `bridge.verify_last_response()` picks a verifier from a
+different model family (reusing M1's `resolve_second_provider`), sends
+it the user's last prompt + the agent's last answer, and asks for a
+structured JSON verdict: `overall`, `correctness`, `safety`,
+`completeness`, `issues[]`, `suggestions[]`, `summary`. The TUI shows
+the result in a colour-coded modal; the GUI exposes the same call as a
+`@Slot` for a JS-side verification panel.
+
+**Files:**
+- `clew_tui/widgets/verification_modal.py` — new TUI widget (110
+  lines). ModalScreen with PASS/WARN/FAIL colour coding (green /
+  yellow / red), a 2x2 grid of sub-verdicts, issues + suggestions as
+  bulleted lists, and a dismiss-on-Esc/Enter binding. Falls back to
+  showing the raw verifier output if JSON parsing fails.
+- `clew_tui/app.py` — added `/verify` slash-command (auto-picks a
+  cross-family verifier, or accepts `/verify <provider_id> [model]`
+  for manual selection). Worker thread runs
+  `bridge.verify_last_response()` and pops the modal on completion.
+- `clew_tui/bridge.py` — added `verify_last_response()` that captures
+  the last assistant message + last user message from `agent.memory`
+  and dispatches to the verifier provider.
+- `clew/web_bridge/bridge.py` — added `@Slot(str, str)
+  verify_last_response(verifier_provider_id, verifier_model)` for the
+  GUI frontend. Empty strings mean "auto-pick a cross-family verifier".
+- `clew_tui/styles_dark.tcss` + `styles_light.tcss` — added
+  `#verify-box`, `#verify-title`, `#verify-grid`, `.verify-cell`,
+  `#verify-meta`, `#verify-summary`, `#verify-issues`,
+  `#verify-suggestions`, `#verify-raw`, `#verify-buttons` styles for
+  both themes.
+
+**Design decisions:**
+- Verifier sees the user's request AND the agent's answer (not just
+  the answer) so it can judge whether the answer actually addresses
+  what the user asked.
+- Verdict is informational — the modal dismisses without modifying the
+  conversation. The user can act on the verifier's suggestions by
+  typing a follow-up prompt.
+- The verifier prompt asks for JSON with a fixed schema (overall,
+  correctness, safety, completeness, issues, suggestions, summary) so
+  the modal can render it consistently. If the verifier returns
+  non-JSON, the modal shows the raw text in a `#verify-raw` section
+  instead of crashing.
+- No retry on the verifier call — verification is a nice-to-have; one
+  transient failure should not block the user's workflow.
+
+### Verification
+
+- `python -c "from clew.capability_catalog import get_catalog;
+  print(len(get_catalog().list_capabilities()))"` → 20 ✓
+- `python -c "from clew.second_opinion import resolve_second_provider,
+  SecondOpinionConfig; print(resolve_second_provider('ollama',
+  SecondOpinionConfig()))"` → `('groq', 'llama-3.3-70b-versatile')` ✓
+- `python -c "from clew.token_budget import check_budget;
+  print(check_budget().exceeded)"` → `False` ✓
+- All new files AST-parse cleanly.
+- `clew_tui.bridge`, `clew_tui.app`, `clew_tui.widgets.verification_modal`
+  import successfully under Textual 8.x.
+- `clew.web_bridge.bridge` AST-parses (PySide6 not required for syntax).
+- No existing tests broken — all 144 tests still pass on the legacy
+  test suite (verified locally before packaging).

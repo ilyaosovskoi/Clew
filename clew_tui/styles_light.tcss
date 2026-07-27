@@ -117,6 +117,72 @@ ApprovalModal {
     width: 100%;
 }
 
+/* -- Verification Modal (G4) -- */
+VerificationModal {
+    align: center middle;
+}
+
+#verify-box {
+    width: 80%;
+    max-width: 120;
+    height: auto;
+    max-height: 32;
+    padding: 1 2;
+    border: thick #0969da;
+    background: #f6f8fa;
+}
+
+#verify-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#verify-grid {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.verify-cell {
+    width: 1fr;
+    padding: 0 1;
+}
+
+#verify-meta {
+    color: #656d76;
+    margin-bottom: 1;
+}
+
+#verify-summary {
+    color: #24292f;
+    margin-bottom: 1;
+}
+
+#verify-issues {
+    color: #bc4c00;
+    margin-bottom: 1;
+}
+
+#verify-suggestions {
+    color: #0969da;
+    margin-bottom: 1;
+}
+
+#verify-raw {
+    color: #656d76;
+    margin-bottom: 1;
+}
+
+#verify-buttons {
+    height: auto;
+    align: center middle;
+    margin-top: 1;
+}
+
+#verify-buttons Button {
+    margin: 1 1 0 1;
+    width: 100%;
+}
+
 /* -- Command Palette -- */
 CommandPalette {
     align: center bottom;
