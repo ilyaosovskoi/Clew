@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Language Preference
-- **Dialogue with user**: Russian (Русский)
+- **Dialogue with user**: English
 - **Code and comments**: English
 
 ## Build & Run
@@ -115,14 +115,14 @@ Key reference documents in `docs/`:
 
 | Priority | Feature | User Pain Addressed | Target Group |
 |----------|---------|---------------------|--------------|
-| **G1** | **User-custom providers (TUI + GUI)** ✅ | "Нетехнические пользователи не знают, как добавить свой ключ/провайдер; power users хотят свои endpoints" | Все группы |
-| **G2** | **Add Nvidia NIM provider** ✅ | "Хочу бегать локальные модели через NIM без настройки Ollama" | Power users, Enterprise |
-| **G3** | **Predictable limits / token efficiency** ✅ | "Лимиты ломают workflow, тратится 4x токенов vs Codex" | Опытные разработчики |
-| **G4** | **Cross-model verification UI** (extends M1) ✅ | "Модель не может проверить себя объективно" | Опытные разработчики, Enterprise |
-| **G5** | **Agent identity + tool-call audit** | "Нет видимости, какой агент что вызвал" | Enterprise/Безопасность |
-| **G6** | **Post-task "bridge" (CMS/editable handoff)** | "После сдачи задачи нет интерфейса для правок без разработчика" | Vibe coders / Нетехнические |
-| **G7** | **Capability catalog / templates** ✅ | "Не знаю, что можно попросить у агента" | Vibe coders / Нетехнические |
-| **G8** | **Polished TUI/GUI, fast bug fixes** | "Долгоживущие баги интерфейса = неуважение" | Все группы |
+| **G1** | **User-custom providers (TUI + GUI)** ✅ | "Non-technical users don't know how to add their own key/provider; power users want their own endpoints" | All groups |
+| **G2** | **Add Nvidia NIM provider** ✅ | "Want to run local models via NIM without Ollama setup" | Power users, Enterprise |
+| **G3** | **Predictable limits / token efficiency** ✅ | "Limits break workflow, spending 4x tokens vs Codex" | Experienced developers |
+| **G4** | **Cross-model verification UI** (extends M1) ✅ | "A model cannot verify itself objectively" | Experienced developers, Enterprise |
+| **G5** | **Agent identity + tool-call audit** | "No visibility into which agent called what tool" | Enterprise/Security |
+| **G6** | **Post-task "bridge" (CMS/editable handoff)** | "After task delivery, no interface for edits without a developer" | Vibe coders / Non-technical |
+| **G7** | **Capability catalog / templates** ✅ | "Don't know what I can ask the agent to do" | Vibe coders / Non-technical |
+| **G8** | **Polished TUI/GUI, fast bug fixes** | "Long-lived UI bugs = disrespect" | All groups |
 
 **Provider System Enhancement Goals:** ✅ **COMPLETED**
 - **User-custom providers**: Config file (`~/.clew/providers.yaml`) + dynamic class loading from `~/.clew/providers/` (plugin-style). Auto-register in `ProviderRegistry` and `AutoRouter`. Works in both TUI (via `ClewBridge.list_providers()`/`set_provider()`) and GUI (via web bridge `list_providers`/`set_provider` slots).
@@ -132,30 +132,30 @@ Remove `FIXES.md` — all bugs described there were already fixed, and the file 
 
 ## Smoke Test Findings (2026-07-25) — COMPLETED
 
-### Что сделано
-1. Изучил архитектуру TUI — `ClewBridge` как граница с core, набор виджетов, Command Palette
-2. Запустил TUI, обнаружил и исправил CSS-несовместимость с Textual 8.x
-3. TUI успешно стартует (status bar, chat area, input box — все отрисовываются)
+### What was done
+1. Studied TUI architecture — `ClewBridge` as core boundary, widget set, Command Palette
+2. Launched TUI, discovered and fixed CSS incompatibility with Textual 8.x
+3. TUI starts successfully (status bar, chat area, input box — all render)
 
-### Что исправлено
-- `styles_dark.tcss` — переписан полностью: удалены `--variable`, `@keyframes`, `transition:`, объединены дублирующиеся `Screen {}` блоки
-- `styles_light.tcss` — аналогично
+### What was fixed
+- `styles_dark.tcss` — fully rewritten: removed `--variable`, `@keyframes`, `transition:`, merged duplicate `Screen {}` blocks
+- `styles_light.tcss` — same approach
 - `command_palette.py` — `$panel` -> `#161b22`
 
-### Лучшее решение (повторять в будущем)
-**Полный перезапис файла вместо починки**: когда CSS файл содержит множество несовместимых конструкций (`var(--*)`, `transition:`, `@keyframes`), эффективнее записать файл с нуля, чем править по одной строке. Построчные `Edit` приводят к битым строкам (комментарий + остаток свойства). `Write` решил проблему за один шаг.
+### Best practice (repeat in future)
+**Full file rewrite instead of patching**: when a CSS file contains many incompatible constructs (`var(--*)`, `transition:`, `@keyframes`), it's more effective to rewrite the file from scratch than to patch line by line. Line-by-line `Edit` leads to broken lines (comment + remainder of property). `Write` solved it in one step.
 
-**Автоматизированные тесты запуска**: Команда для проверки TUI без ручного запуска (run TUI, wait 3s, SIGINT, check stderr) сэкономила время. Без неё пришлось бы запускать UI вручную после каждого изменения.
+**Automated launch tests**: Command to verify TUI without manual launch (run TUI, wait 3s, SIGINT, check stderr) saved time. Without it, manual UI launch would be needed after every change.
 
-**CSS в Textual 8.x**: Использовать ТОЛЬКО буквальные значения цветов (#rrggbb) или Textual built-in переменные ($accent, $text, $text-muted). Не `var(--*)`, не `@keyframes`, не `transition: Xs ease`.
+**CSS in Textual 8.x**: Use ONLY literal color values (#rrggbb) or Textual built-in variables ($accent, $text, $text-muted). No `var(--*)`, no `@keyframes`, no `transition: Xs ease`.
 
-### Что предстоит протестировать
-- Тема переключения (Ctrl+T)
-- Базовый чат-взаимодействие
-- Slash-команды (/help, /section, /model, /files)
-- Command palette (Ctr+P)
-- Inline подсказки (/...)
-- Модалки (Approve/Guardian)
+### What remains to test
+- Theme switching (Ctrl+T)
+- Basic chat interaction
+- Slash commands (/help, /section, /model, /files)
+- Command palette (Ctrl+P)
+- Inline hints (/...)
+- Modals (Approve/Guardian)
 - GUI launch (Ctrl+G)
 
 ## Issue #8 Research (2026-07-25) — COMPLETED
