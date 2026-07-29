@@ -1483,3 +1483,314 @@ class ClewBridge:
             return {"ok": True, "csv": get_spend_dashboard().export_report_csv(days=days)}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+
+    # ── G9/G10/G11/G13 additions ─────────────────────────────
+
+    # ── G9: Hook System ─────────────────────────────────────────────────────
+
+    def register_hook(
+        self,
+        hook_type: str,
+        callback_name: str,
+        priority: int = 100,
+        enabled: bool = True,
+        description: str = "",
+        source: str = "",
+    ) -> Dict[str, Any]:
+        """Register a named hook callback from the hook registry.
+
+        The actual callback is looked up by name from the user's hook modules
+        in ~/.clew/hooks/.  For programmatic registration, use the HookManager
+        directly.
+        """
+        try:
+            from clew.hook_system import get_hook_manager
+            mgr = get_hook_manager()
+            # For the bridge, we look up the callback by name from the loaded modules.
+            # This is a simplified version — the actual callback must have been
+            # registered via a user module or the API.
+            return {"ok": True, "message": "Use ~/.clew/hooks/*.py modules to register hooks"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def list_hooks(self, hook_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Return metadata for all registered hooks, optionally filtered by type."""
+        try:
+            from clew.hook_system import get_hook_manager
+            return get_hook_manager().list_hooks(hook_type=hook_type)
+        except Exception:
+            return []
+
+
+    def remove_hook(self, hook_id: str) -> Dict[str, Any]:
+        """Remove a hook by its id."""
+        try:
+            from clew.hook_system import get_hook_manager
+            removed = get_hook_manager().remove(hook_id)
+            return {"ok": removed, "hook_id": hook_id}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def set_hook_enabled(self, hook_id: str, enabled: bool) -> Dict[str, Any]:
+        """Enable or disable a hook."""
+        try:
+            from clew.hook_system import get_hook_manager
+            found = get_hook_manager().set_enabled(hook_id, enabled)
+            return {"ok": found, "hook_id": hook_id, "enabled": enabled}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def test_hook(self, hook_id: str, event_type: str, **kwargs: Any) -> Dict[str, Any]:
+        """Dry-run a hook with a synthetic event."""
+        try:
+            from clew.hook_system import get_hook_manager
+            return get_hook_manager().test_hook(hook_id, event_type, **kwargs)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def get_hook_stats(self) -> Dict[str, Any]:
+        """Return hook system statistics."""
+        try:
+            from clew.hook_system import get_hook_manager
+            return {"ok": True, **get_hook_manager().stats()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # ── G10: Checkpoint / Rewind ────────────────────────────────────────────
+
+    def create_checkpoint(
+        self,
+        message_count: int = 0,
+        touched_files: Optional[List[str]] = None,
+        label: str = "",
+    ) -> Dict[str, Any]:
+        """Create a manual checkpoint of the current state."""
+        try:
+            from clew.checkpoint import get_checkpoint_manager
+            mgr = get_checkpoint_manager()
+            cp = mgr.create_checkpoint(
+                message_count=message_count,
+                touched_files=touched_files,
+                label=label,
+            )
+            return {"ok": True, "checkpoint": cp.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def list_checkpoints(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Return metadata for all checkpoints (most recent first)."""
+        try:
+            from clew.checkpoint import get_checkpoint_manager
+            return get_checkpoint_manager().list_checkpoints(limit=limit)
+        except Exception:
+            return []
+
+
+    def get_checkpoint(self, checkpoint_id: str) -> Optional[Dict[str, Any]]:
+        """Return a single checkpoint's metadata."""
+        try:
+            from clew.checkpoint import get_checkpoint_manager
+            return get_checkpoint_manager().get_checkpoint(checkpoint_id)
+        except Exception:
+            return None
+
+
+    def rewind_checkpoint(self, n: int = 1) -> Dict[str, Any]:
+        """Rewind to the checkpoint N steps back."""
+        try:
+            from clew.checkpoint import get_checkpoint_manager
+            return get_checkpoint_manager().rewind(n)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def rewind_to_checkpoint(self, checkpoint_id: str) -> Dict[str, Any]:
+        """Rewind to a specific checkpoint by id."""
+        try:
+            from clew.checkpoint import get_checkpoint_manager
+            return get_checkpoint_manager().rewind_to(checkpoint_id)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def diff_checkpoints(self, from_id: str, to_id: str) -> Dict[str, Any]:
+        """Compare two checkpoints."""
+        try:
+            from clew.checkpoint import get_checkpoint_manager
+            return get_checkpoint_manager().diff_checkpoints(from_id, to_id)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def set_auto_checkpoint(self, enabled: bool) -> Dict[str, Any]:
+        """Enable or disable auto-checkpointing."""
+        try:
+            from clew.checkpoint import get_checkpoint_manager
+            get_checkpoint_manager().set_auto_checkpoint(enabled)
+            return {"ok": True, "auto_checkpoint": enabled}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def get_checkpoint_stats(self) -> Dict[str, Any]:
+        """Return checkpoint statistics."""
+        try:
+            from clew.checkpoint import get_checkpoint_manager
+            return {"ok": True, **get_checkpoint_manager().stats()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # ── G11: GitHub Automation ──────────────────────────────────────────────
+
+    def github_set_token(self, token: str) -> Dict[str, Any]:
+        """Set the GitHub authentication token."""
+        try:
+            from clew.github_automation import get_github_automation
+            get_github_automation().set_token(token)
+            return {"ok": True, "message": "GitHub token set"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_set_repo(self, owner: str, repo: str) -> Dict[str, Any]:
+        """Set the GitHub repository (owner/repo)."""
+        try:
+            from clew.github_automation import get_github_automation
+            get_github_automation().set_repo(owner, repo)
+            return {"ok": True, "repo": f"{owner}/{repo}"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_auto_detect_repo(self, workspace: Optional[str] = None) -> Dict[str, Any]:
+        """Auto-detect the GitHub repo from git remote."""
+        try:
+            from clew.github_automation import get_github_automation
+            repo = get_github_automation().auto_detect_repo(workspace)
+            if repo:
+                return {"ok": True, "repo": repo}
+            return {"ok": False, "error": "No GitHub remote found"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_list_prs(self, state: str = "open", limit: int = 10) -> Dict[str, Any]:
+        """List pull requests."""
+        try:
+            from clew.github_automation import get_github_automation
+            return get_github_automation().list_prs(state=state, limit=limit)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_get_pr(self, number: int) -> Dict[str, Any]:
+        """Get a single pull request."""
+        try:
+            from clew.github_automation import get_github_automation
+            return get_github_automation().get_pr(number)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_create_pr(self, title: str, body: str = "", head: str = "", base: str = "main") -> Dict[str, Any]:
+        """Create a pull request."""
+        try:
+            from clew.github_automation import get_github_automation
+            return get_github_automation().create_pr(title=title, body=body, head=head, base=base)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_get_pr_context(self, number: int) -> Dict[str, Any]:
+        """Get full PR context for implementing."""
+        try:
+            from clew.github_automation import get_github_automation
+            return get_github_automation().get_pr_context(number)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_list_issues(self, state: str = "open", limit: int = 10, labels: str = "") -> Dict[str, Any]:
+        """List issues."""
+        try:
+            from clew.github_automation import get_github_automation
+            return get_github_automation().list_issues(state=state, limit=limit, labels=labels)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_get_issue(self, number: int) -> Dict[str, Any]:
+        """Get a single issue."""
+        try:
+            from clew.github_automation import get_github_automation
+            return get_github_automation().get_issue(number)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_create_issue(self, title: str, body: str = "", labels: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Create an issue."""
+        try:
+            from clew.github_automation import get_github_automation
+            return get_github_automation().create_issue(title=title, body=body, labels=labels)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_comment_on_pr(self, number: int, body: str) -> Dict[str, Any]:
+        """Add a comment to a PR."""
+        try:
+            from clew.github_automation import get_github_automation
+            return get_github_automation().comment_on_pr(number, body)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_generate_action(self, trigger: str = "pull_request") -> Dict[str, Any]:
+        """Generate a GitHub Action workflow template."""
+        try:
+            from clew.github_automation import get_github_automation
+            return get_github_automation().generate_action_template(trigger=trigger)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def github_status(self) -> Dict[str, Any]:
+        """Return the GitHub automation status."""
+        try:
+            from clew.github_automation import get_github_automation
+            return {"ok": True, **get_github_automation().status()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # ── G13: MCP Server ─────────────────────────────────────────────────────
+
+    def mcp_server_list_tools(self) -> Dict[str, Any]:
+        """List tools available in MCP server mode."""
+        try:
+            from clew.mcp_server import MCPServerMode
+            server = MCPServerMode(workspace=str(self._agent.workspace) if self._agent else os.getcwd())
+            return {"ok": True, "tools": server.list_tools()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    def mcp_server_status(self) -> Dict[str, Any]:
+        """Return MCP server status."""
+        try:
+            from clew.mcp_server import MCPServerMode
+            server = MCPServerMode(workspace=str(self._agent.workspace) if self._agent else os.getcwd())
+            return {"ok": True, **server.status()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+

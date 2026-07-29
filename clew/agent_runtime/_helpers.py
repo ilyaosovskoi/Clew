@@ -11,6 +11,7 @@ unit-tested in isolation without importing the full ToolEngine.
 """
 
 import logging
+import os
 import shlex
 from pathlib import Path
 from typing import List, Optional, Tuple

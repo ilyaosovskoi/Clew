@@ -3780,6 +3780,316 @@ class ClewBridge(QObject):
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    # ── G9/G10/G11/G13 additions ───────────────────────────────
+
+    # ── G9: Hook System ─────────────────────────────────────────────────────
+
+    # @Slot(str, result='QVariantMap')
+    def list_hooks(self, hook_type):
+        """List registered hooks, optionally filtered by type."""
+        try:
+            from ..hook_system import get_hook_manager
+            ht = hook_type or None
+            return {"ok": True, "hooks": get_hook_manager().list_hooks(hook_type=ht)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, result='QVariantMap')
+    def remove_hook(self, hook_id):
+        """Remove a hook by id."""
+        try:
+            from ..hook_system import get_hook_manager
+            removed = get_hook_manager().remove(hook_id)
+            return {"ok": removed, "hook_id": hook_id}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, bool, result='QVariantMap')
+    def set_hook_enabled(self, hook_id, enabled):
+        """Enable or disable a hook."""
+        try:
+            from ..hook_system import get_hook_manager
+            found = get_hook_manager().set_enabled(hook_id, bool(enabled))
+            return {"ok": found, "hook_id": hook_id, "enabled": bool(enabled)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, str, result='QVariantMap')
+    def test_hook(self, hook_id, event_type):
+        """Dry-run a hook with a synthetic event."""
+        try:
+            from ..hook_system import get_hook_manager
+            return get_hook_manager().test_hook(hook_id, event_type)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(result='QVariantMap')
+    def get_hook_stats(self):
+        """Return hook system statistics."""
+        try:
+            from ..hook_system import get_hook_manager
+            return {"ok": True, **get_hook_manager().stats()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # ── G10: Checkpoint / Rewind ────────────────────────────────────────────
+
+    # @Slot(int, str, result='QVariantMap')
+    def create_checkpoint(self, message_count, label):
+        """Create a manual checkpoint."""
+        try:
+            from ..checkpoint import get_checkpoint_manager
+            mgr = get_checkpoint_manager()
+            cp = mgr.create_checkpoint(
+                message_count=int(message_count) if message_count else 0,
+                label=label or "",
+            )
+            return {"ok": True, "checkpoint": cp.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(int, result='QVariantList')
+    def list_checkpoints(self, limit):
+        """List checkpoints (most recent first)."""
+        try:
+            from ..checkpoint import get_checkpoint_manager
+            return get_checkpoint_manager().list_checkpoints(limit=int(limit) if limit else 50)
+        except Exception:
+            return []
+
+
+    # @Slot(str, result='QVariantMap')
+    def get_checkpoint(self, checkpoint_id):
+        """Get a single checkpoint by id."""
+        try:
+            from ..checkpoint import get_checkpoint_manager
+            cp = get_checkpoint_manager().get_checkpoint(checkpoint_id)
+            return cp if cp else {"ok": False, "error": "not found"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(int, result='QVariantMap')
+    def rewind_checkpoint(self, n):
+        """Rewind N steps."""
+        try:
+            from ..checkpoint import get_checkpoint_manager
+            return get_checkpoint_manager().rewind(int(n) if n else 1)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, result='QVariantMap')
+    def rewind_to_checkpoint(self, checkpoint_id):
+        """Rewind to a specific checkpoint."""
+        try:
+            from ..checkpoint import get_checkpoint_manager
+            return get_checkpoint_manager().rewind_to(checkpoint_id)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, str, result='QVariantMap')
+    def diff_checkpoints(self, from_id, to_id):
+        """Compare two checkpoints."""
+        try:
+            from ..checkpoint import get_checkpoint_manager
+            return get_checkpoint_manager().diff_checkpoints(from_id, to_id)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(bool, result='QVariantMap')
+    def set_auto_checkpoint(self, enabled):
+        """Enable or disable auto-checkpointing."""
+        try:
+            from ..checkpoint import get_checkpoint_manager
+            get_checkpoint_manager().set_auto_checkpoint(bool(enabled))
+            return {"ok": True, "auto_checkpoint": bool(enabled)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(result='QVariantMap')
+    def get_checkpoint_stats(self):
+        """Return checkpoint statistics."""
+        try:
+            from ..checkpoint import get_checkpoint_manager
+            return {"ok": True, **get_checkpoint_manager().stats()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # ── G11: GitHub Automation ──────────────────────────────────────────────
+
+    # @Slot(str, result='QVariantMap')
+    def github_set_token(self, token):
+        """Set the GitHub authentication token."""
+        try:
+            from ..github_automation import get_github_automation
+            get_github_automation().set_token(token)
+            return {"ok": True, "message": "GitHub token set"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, result='QVariantMap')
+    def github_set_repo(self, owner_repo):
+        """Set the GitHub repository (format: 'owner/repo')."""
+        try:
+            from ..github_automation import get_github_automation
+            parts = owner_repo.split("/", 1)
+            if len(parts) != 2:
+                return {"ok": False, "error": "Format: owner/repo"}
+            get_github_automation().set_repo(parts[0], parts[1])
+            return {"ok": True, "repo": owner_repo}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, int, result='QVariantMap')
+    def github_list_prs(self, state, limit):
+        """List pull requests."""
+        try:
+            from ..github_automation import get_github_automation
+            return get_github_automation().list_prs(
+                state=state or "open",
+                limit=int(limit) if limit else 10,
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(int, result='QVariantMap')
+    def github_get_pr(self, number):
+        """Get a single pull request."""
+        try:
+            from ..github_automation import get_github_automation
+            return get_github_automation().get_pr(int(number))
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, str, str, str, result='QVariantMap')
+    def github_create_pr(self, title, body, head, base):
+        """Create a pull request."""
+        try:
+            from ..github_automation import get_github_automation
+            return get_github_automation().create_pr(
+                title=title, body=body or "", head=head, base=base or "main",
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(int, result='QVariantMap')
+    def github_get_pr_context(self, number):
+        """Get full PR context for implementing."""
+        try:
+            from ..github_automation import get_github_automation
+            return get_github_automation().get_pr_context(int(number))
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, int, str, result='QVariantMap')
+    def github_list_issues(self, state, limit, labels):
+        """List issues."""
+        try:
+            from ..github_automation import get_github_automation
+            return get_github_automation().list_issues(
+                state=state or "open",
+                limit=int(limit) if limit else 10,
+                labels=labels or "",
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(int, result='QVariantMap')
+    def github_get_issue(self, number):
+        """Get a single issue."""
+        try:
+            from ..github_automation import get_github_automation
+            return get_github_automation().get_issue(int(number))
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, str, str, result='QVariantMap')
+    def github_create_issue(self, title, body, labels_json):
+        """Create an issue."""
+        try:
+            from ..github_automation import get_github_automation
+            labels = json.loads(labels_json) if labels_json else None
+            return get_github_automation().create_issue(title=title, body=body or "", labels=labels)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(int, str, result='QVariantMap')
+    def github_comment_on_pr(self, number, body):
+        """Add a comment to a PR or issue."""
+        try:
+            from ..github_automation import get_github_automation
+            return get_github_automation().comment_on_pr(int(number), body)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(str, result='QVariantMap')
+    def github_generate_action(self, trigger):
+        """Generate a GitHub Action workflow template."""
+        try:
+            from ..github_automation import get_github_automation
+            return get_github_automation().generate_action_template(trigger=trigger or "pull_request")
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(result='QVariantMap')
+    def github_status(self):
+        """Return the GitHub automation status."""
+        try:
+            from ..github_automation import get_github_automation
+            return {"ok": True, **get_github_automation().status()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # ── G13: MCP Server ─────────────────────────────────────────────────────
+
+    # @Slot(result='QVariantMap')
+    def mcp_server_list_tools(self):
+        """List tools available in MCP server mode."""
+        try:
+            from ..mcp_server import MCPServerMode
+            ws = str(self._agent.workspace) if hasattr(self, '_agent') and self._agent else os.getcwd()
+            server = MCPServerMode(workspace=ws)
+            return {"ok": True, "tools": server.list_tools()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+    # @Slot(result='QVariantMap')
+    def mcp_server_status(self):
+        """Return MCP server status."""
+        try:
+            from ..mcp_server import MCPServerMode
+            ws = str(self._agent.workspace) if hasattr(self, '_agent') and self._agent else os.getcwd()
+            server = MCPServerMode(workspace=ws)
+            return {"ok": True, **server.status()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+
+
     # ── Cleanup ───────────────────────────────────────────────────
 
     def cleanup(self) -> None:

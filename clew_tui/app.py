@@ -273,6 +273,16 @@ class ClewTUIApp(App):
             self._exec_cost(arg)
         elif cmd == "/spend":
             self._exec_spend(arg)
+        elif cmd == "/hooks":
+            self._exec_hooks(arg)
+        elif cmd == "/checkpoint":
+            self._exec_checkpoint(arg)
+        elif cmd == "/rewind":
+            self._exec_rewind(arg)
+        elif cmd == "/github":
+            self._exec_github(arg)
+        elif cmd == "/mcp-server":
+            self._exec_mcp_server(arg)
         else:
             self.query_one(ChatLog).add_system(
                 f"Unknown command: {cmd}. Type /help for available commands."
@@ -2049,3 +2059,459 @@ class ClewTUIApp(App):
                 self.exit()
         except Exception as e:
             self.query_one(ChatLog).add_error(f"Failed to launch GUI: {e}")
+
+
+    # ── G9/G10/G11/G13 slash commands ──────────────────────────
+
+    # ── G9: /hooks ──────────────────────────────────────────────────────────
+
+    def _exec_hooks(self, arg: str) -> None:
+        """Manage hook system.
+
+        Usage:
+            /hooks                    — list all hooks
+            /hooks enable <id>        — enable a hook
+            /hooks disable <id>       — disable a hook
+            /hooks remove <id>        — remove a hook
+            /hooks test <id> <type>   — dry-run a hook
+            /hooks stats              — show hook statistics
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+
+        if not arg or arg == "stats":
+            if arg == "stats":
+                r = self.bridge.get_hook_stats()
+                if r.get("ok"):
+                    data = r.get("hooks", {})
+                    lines = ["[b]Hook System Stats[/b]", ""]
+                    for ht, info in data.items():
+                        lines.append(
+                            f"  {ht}: {info['enabled']} enabled / {info['total']} total"
+                        )
+                    chat.add_system("\n".join(lines))
+                else:
+                    chat.add_error(f"Error: {r.get('error', 'unknown')}")
+            else:
+                hooks = self.bridge.list_hooks()
+                if not hooks:
+                    chat.add_system(
+                        "[b]Hook System[/b]\n\n"
+                        "  No hooks registered.\n\n"
+                        "  Add Python modules to [cyan]~/.clew/hooks/[/cyan] to register hooks.\n"
+                        "  Each module may define [cyan]register_hooks(manager)[/cyan]."
+                    )
+                else:
+                    lines = ["[b]Hook System[/b]  (~/.clew/hooks/)", ""]
+                    for h in hooks:
+                        status = "[green]ON[/green]" if h["enabled"] else "[red]OFF[/red]"
+                        lines.append(
+                            f"  [{h['id']}] {h['name']}  ({h['hook_type']})  {status}\n"
+                            f"     priority: {h['priority']}  source: {h.get('source', 'api')}"
+                        )
+                    lines.append("")
+                    lines.append("  Use [cyan]/hooks enable|disable|remove <id>[/cyan] to manage.")
+                    chat.add_system("\n".join(lines))
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split(None, 1)
+        sub = parts[0].lower()
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "enable":
+            if not rest:
+                chat.add_system("Usage: /hooks enable <hook_id>")
+            else:
+                r = self.bridge.set_hook_enabled(rest, True)
+                if r.get("ok"):
+                    chat.add_system(f"Hook [cyan]{rest}[/cyan] enabled.")
+                else:
+                    chat.add_error(f"Hook {rest} not found.")
+        elif sub == "disable":
+            if not rest:
+                chat.add_system("Usage: /hooks disable <hook_id>")
+            else:
+                r = self.bridge.set_hook_enabled(rest, False)
+                if r.get("ok"):
+                    chat.add_system(f"Hook [cyan]{rest}[/cyan] disabled.")
+                else:
+                    chat.add_error(f"Hook {rest} not found.")
+        elif sub == "remove":
+            if not rest:
+                chat.add_system("Usage: /hooks remove <hook_id>")
+            else:
+                r = self.bridge.remove_hook(rest)
+                if r.get("ok"):
+                    chat.add_system(f"Hook [cyan]{rest}[/cyan] removed.")
+                else:
+                    chat.add_error(f"Hook {rest} not found.")
+        elif sub == "test":
+            test_parts = rest.split(None, 1)
+            if len(test_parts) < 2:
+                chat.add_system("Usage: /hooks test <hook_id> <event_type>")
+            else:
+                r = self.bridge.test_hook(test_parts[0], test_parts[1])
+                if r.get("ok"):
+                    result = r.get("result", {})
+                    chat.add_system(f"Hook test result: {result.get('action', 'unknown')} — {result.get('message', '')}")
+                else:
+                    chat.add_error(f"Test failed: {r.get('error', 'unknown')}")
+        else:
+            chat.add_system(f"Unknown subcommand: {sub}. Use enable|disable|remove|test|stats.")
+
+        self.query_one(InputBox).focus()
+
+
+    # ── G10: /checkpoint ────────────────────────────────────────────────────
+
+    def _exec_checkpoint(self, arg: str) -> None:
+        """Create / manage checkpoints.
+
+        Usage:
+            /checkpoint                — list checkpoints
+            /checkpoint save [label]   — create a manual checkpoint
+            /checkpoint auto [on|off]  — toggle auto-checkpointing
+            /checkpoint stats          — show checkpoint statistics
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+
+        if not arg:
+            cps = self.bridge.list_checkpoints(limit=20)
+            if not cps:
+                chat.add_system(
+                    "[b]Checkpoints[/b]\n\n"
+                    "  No checkpoints yet.\n\n"
+                    "  Use [cyan]/checkpoint save [label][/cyan] to create one.\n"
+                    "  Auto-checkpointing is enabled by default."
+                )
+            else:
+                lines = ["[b]Checkpoints[/b]  (~/.clew/checkpoints/)", ""]
+                for cp in cps:
+                    label = f"  [{cp.get('label', '')}] " if cp.get('label') else "  "
+                    lines.append(
+                        f"{label}{cp['id']}  turn={cp['turn_number']}  "
+                        f"msg={cp['message_count']}  files={len(cp.get('file_manifest', []))}"
+                    )
+                lines.append("")
+                lines.append("  Use [cyan]/rewind <n>[/cyan] to go back to a checkpoint.")
+                chat.add_system("\n".join(lines))
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split(None, 1)
+        sub = parts[0].lower()
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "save":
+            # Get current message count from the agent
+            msg_count = 0
+            try:
+                agent = self.bridge._agent
+                if agent is not None:
+                    msg_count = len(agent.memory.messages)
+            except Exception:
+                pass
+            # Get touched files
+            touched = []
+            try:
+                agent = self.bridge._agent
+                if agent is not None and hasattr(agent, '_tool_engine'):
+                    touched = list(agent._tool_engine._touched_files)
+            except Exception:
+                pass
+            r = self.bridge.create_checkpoint(
+                message_count=msg_count,
+                touched_files=touched,
+                label=rest,
+            )
+            if r.get("ok"):
+                cp = r.get("checkpoint", {})
+                chat.add_system(
+                    f"[b]Checkpoint saved:[/b] {cp.get('id')}\n"
+                    f"  Turn: {cp.get('turn_number')}  Messages: {cp.get('message_count')}\n"
+                    f"  Files backed up: {len(cp.get('file_manifest', []))}"
+                )
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+        elif sub == "auto":
+            if rest.lower() in ("off", "false", "no"):
+                r = self.bridge.set_auto_checkpoint(False)
+                chat.add_system("Auto-checkpointing [red]disabled[/red].")
+            else:
+                r = self.bridge.set_auto_checkpoint(True)
+                chat.add_system("Auto-checkpointing [green]enabled[/green].")
+        elif sub == "stats":
+            r = self.bridge.get_checkpoint_stats()
+            if r.get("ok"):
+                lines = ["[b]Checkpoint Statistics[/b]", ""]
+                lines.append(f"  Session: {r.get('session_id', '?')}")
+                lines.append(f"  Total checkpoints: {r.get('total_checkpoints', 0)}")
+                lines.append(f"  Current turn: {r.get('current_turn', 0)}")
+                lines.append(f"  Auto-checkpoint: {r.get('auto_checkpoint_enabled', True)}")
+                lines.append(f"  Total files backed up: {r.get('total_files_backed_up', 0)}")
+                chat.add_system("\n".join(lines))
+            else:
+                chat.add_error(f"Error: {r.get('error', 'unknown')}")
+        else:
+            chat.add_system(f"Unknown subcommand: {sub}. Use save|auto|stats.")
+
+        self.query_one(InputBox).focus()
+
+
+    # ── G10: /rewind ────────────────────────────────────────────────────────
+
+    def _exec_rewind(self, arg: str) -> None:
+        """Rewind to a previous checkpoint.
+
+        Usage:
+            /rewind <n>          — rewind N steps
+            /rewind to <id>      — rewind to a specific checkpoint
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+
+        if not arg:
+            chat.add_system("Usage: /rewind <n>  or  /rewind to <checkpoint_id>")
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split(None, 1)
+        if parts[0].lower() == "to" and len(parts) > 1:
+            r = self.bridge.rewind_to_checkpoint(parts[1].strip())
+        else:
+            try:
+                n = int(parts[0])
+            except ValueError:
+                chat.add_error(f"Invalid number: {parts[0]}")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.rewind_checkpoint(n)
+
+        if r.get("ok"):
+            cp = r.get("checkpoint", {})
+            files = r.get("files_restored", [])
+            errors = r.get("errors", [])
+            lines = [
+                f"[b]Rewound to checkpoint:[/b] {cp.get('id')}",
+                f"  Turn: {cp.get('turn_number')}  Messages: {cp.get('message_count')}",
+                f"  Files restored: {len(files)}",
+            ]
+            if errors:
+                lines.append(f"  [yellow]Warnings:[/yellow] {len(errors)}")
+                for e in errors[:5]:
+                    lines.append(f"    - {e}")
+            lines.append("")
+            lines.append("[yellow]Note:[/yellow] You may need to restart the conversation to see the full effect.")
+            chat.add_system("\n".join(lines))
+        else:
+            chat.add_error(f"Rewind failed: {r.get('error', 'unknown')}")
+
+        self.query_one(InputBox).focus()
+
+
+    # ── G11: /github ────────────────────────────────────────────────────────
+
+    def _exec_github(self, arg: str) -> None:
+        """GitHub automation commands.
+
+        Usage:
+            /github                         — show status
+            /github auth <token>            — set GitHub token
+            /github repo <owner/repo>       — set repository
+            /github detect                  — auto-detect repo from git remote
+            /github prs [state]             — list PRs
+            /github pr <num>                — get PR details
+            /github pr <num> implement      — get PR context for implementation
+            /github issues [state]          — list issues
+            /github issue <num>             — get issue details
+            /github action [trigger]        — generate GitHub Action template
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+
+        if not arg:
+            r = self.bridge.github_status()
+            if r.get("ok"):
+                lines = ["[b]GitHub Automation[/b]", ""]
+                lines.append(f"  Token: {'[green]configured[/green]' if r.get('has_token') else '[red]not set[/red]'}")
+                lines.append(f"  Repo: {r.get('repo', 'not set')}")
+                lines.append("")
+                lines.append("  Use [cyan]/github auth <token>[/cyan] to set your token.")
+                lines.append("  Use [cyan]/github detect[/cyan] to auto-detect the repo.")
+                chat.add_system("\n".join(lines))
+            else:
+                chat.add_error(f"Error: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split(None, 1)
+        sub = parts[0].lower()
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "auth":
+            if not rest:
+                chat.add_system("Usage: /github auth <token>")
+            else:
+                r = self.bridge.github_set_token(rest)
+                if r.get("ok"):
+                    chat.add_system("[green]GitHub token set.[/green]")
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "repo":
+            if not rest:
+                chat.add_system("Usage: /github repo <owner/repo>")
+            else:
+                r = self.bridge.github_set_repo(rest)
+                if r.get("ok"):
+                    chat.add_system(f"Repo set to [cyan]{rest}[/cyan].")
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "detect":
+            r = self.bridge.github_auto_detect_repo()
+            if r.get("ok"):
+                chat.add_system(f"Detected repo: [cyan]{r['repo']}[/cyan]")
+            else:
+                chat.add_error(f"Auto-detect failed: {r.get('error')}")
+        elif sub == "prs":
+            r = self.bridge.github_list_prs(state=rest or "open")
+            if r.get("ok"):
+                prs = r.get("prs", [])
+                if not prs:
+                    chat.add_system("No pull requests found.")
+                else:
+                    lines = ["[b]Pull Requests[/b]", ""]
+                    for pr in prs:
+                        draft = " [dim](draft)[/dim]" if pr.get("draft") else ""
+                        lines.append(f"  #{pr['number']} {pr['title']}{draft}")
+                        lines.append(f"     {pr['head_ref']} → {pr['base_ref']}  by {pr['author']}")
+                    chat.add_system("\n".join(lines))
+            else:
+                chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "pr":
+            pr_parts = rest.split(None, 1)
+            if not pr_parts:
+                chat.add_system("Usage: /github pr <number> [implement]")
+            else:
+                try:
+                    pr_num = int(pr_parts[0])
+                except ValueError:
+                    chat.add_error(f"Invalid PR number: {pr_parts[0]}")
+                    self.query_one(InputBox).focus()
+                    return
+                if len(pr_parts) > 1 and pr_parts[1].lower() == "implement":
+                    r = self.bridge.github_get_pr_context(pr_num)
+                    if r.get("ok"):
+                        prompt = r.get("implement_prompt", "")
+                        chat.add_system(f"[b]PR #{pr_num} Implementation Context[/b]\n\n{prompt[:3000]}")
+                    else:
+                        chat.add_error(f"Failed: {r.get('error')}")
+                else:
+                    r = self.bridge.github_get_pr(pr_num)
+                    if r.get("ok"):
+                        pr = r["pr"]
+                        lines = [
+                            f"[b]PR #{pr['number']}: {pr['title']}[/b]",
+                            f"  State: {pr['state']}  Author: {pr['author']}",
+                            f"  Branch: {pr['head_ref']} → {pr['base_ref']}",
+                            f"  URL: {pr['url']}",
+                            "",
+                            f"  {pr.get('body', '(no description)')[:500]}",
+                        ]
+                        chat.add_system("\n".join(lines))
+                    else:
+                        chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "issues":
+            r = self.bridge.github_list_issues(state=rest or "open")
+            if r.get("ok"):
+                issues = r.get("issues", [])
+                if not issues:
+                    chat.add_system("No issues found.")
+                else:
+                    lines = ["[b]Issues[/b]", ""]
+                    for issue in issues:
+                        labels = ", ".join(issue.get("labels", []))
+                        lines.append(f"  #{issue['number']} {issue['title']}  [{labels}]")
+                    chat.add_system("\n".join(lines))
+            else:
+                chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "issue":
+            if not rest:
+                chat.add_system("Usage: /github issue <number>")
+            else:
+                try:
+                    issue_num = int(rest)
+                except ValueError:
+                    chat.add_error(f"Invalid issue number: {rest}")
+                    self.query_one(InputBox).focus()
+                    return
+                r = self.bridge.github_get_issue(issue_num)
+                if r.get("ok"):
+                    issue = r["issue"]
+                    lines = [
+                        f"[b]Issue #{issue['number']}: {issue['title']}[/b]",
+                        f"  State: {issue['state']}  Author: {issue['author']}",
+                        f"  Labels: {', '.join(issue.get('labels', []))}",
+                        f"  URL: {issue['url']}",
+                        "",
+                        f"  {issue.get('body', '(no description)')[:500]}",
+                    ]
+                    chat.add_system("\n".join(lines))
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "action":
+            r = self.bridge.github_generate_action(trigger=rest or "pull_request")
+            if r.get("ok"):
+                chat.add_system(f"[b]GitHub Action Template[/b]\n\n```yaml\n{r['yaml']}\n```")
+            else:
+                chat.add_error(f"Failed: {r.get('error')}")
+        else:
+            chat.add_system(f"Unknown subcommand: {sub}. Use auth|repo|detect|prs|pr|issues|issue|action.")
+
+        self.query_one(InputBox).focus()
+
+
+    # ── G13: /mcp-server ────────────────────────────────────────────────────
+
+    def _exec_mcp_server(self, arg: str) -> None:
+        """MCP Server mode information.
+
+        Usage:
+            /mcp-server          — show status and available tools
+            /mcp-server start    — show how to start the MCP server
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+
+        if arg == "start":
+            chat.add_system(
+                "[b]MCP Server Mode[/b]\n\n"
+                "  Start the MCP server with:\n"
+                "    [cyan]clew-acp --mcp-server --workspace /path/to/project[/cyan]\n\n"
+                "  For write access:\n"
+                "    [cyan]clew-acp --mcp-server --allow-writes[/cyan]\n\n"
+                "  For custom tools:\n"
+                "    [cyan]clew-acp --mcp-server --tools read_file write_file search_project[/cyan]\n\n"
+                "  Other agents can then connect to Clew as an MCP tool provider."
+            )
+        else:
+            r = self.bridge.mcp_server_status()
+            if r.get("ok"):
+                tools = r.get("available_tools", 0)
+                lines = [
+                    "[b]MCP Server Mode[/b]",
+                    "",
+                    f"  Version: {r.get('version', '?')}",
+                    f"  Protocol: {r.get('protocol_version', '?')}",
+                    f"  Workspace: {r.get('workspace', '?')}",
+                    f"  Write mode: {r.get('allow_writes', False)}",
+                    f"  Available tools: {tools}",
+                    "",
+                    "  Use [cyan]/mcp-server start[/cyan] for launch instructions.",
+                ]
+                chat.add_system("\n".join(lines))
+            else:
+                chat.add_error(f"Error: {r.get('error', 'unknown')}")
+
+        self.query_one(InputBox).focus()

@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run GUI**: `clew` (or `clew-gui`)
 - **Run CLI**: `clew-cli`
 - **Run ACP server**: `clew-acp`
+- **Run MCP server**: `clew-acp --mcp-server` (or `python -m clew.mcp_server`)
 - **Run tests**: `pytest clew/` (or `pytest clew/agent/test_v2.py` for v2-specific)
 - **Lint**: `black clew/ clew_tui/` + `mypy clew/ clew_tui/`
 
@@ -23,19 +24,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **`clew_tui/`** — TUI frontend. **Never imports clew internals directly.** Communicates exclusively through `clew_tui.bridge.ClewBridge`, which owns a plain `AgentRuntime` (same path as `clew/cli.py`). If a widget needs something from the core, add a method to `ClewBridge`.
 
 ### Agent runtimes (two coexist)
-- **`AgentRuntime`** (`clew/agent_runtime.py`, 5750 lines) — legacy, preserved unchanged. Used by TUI bridge, CLI, and GUI web bridge.
+- **`AgentRuntime`** (`clew/agent_runtime/runtime.py`, 1510 lines) — legacy, preserved unchanged. Used by TUI bridge, CLI, and GUI web bridge.
 - **`AgentRuntimeV2`** (`clew/agent/runtime.py`) — wraps legacy, adds: asyncio `ChatStateActor`, `CircuitBreaker`, three-tier `CompactionEngine`, `InterjectionBuffer` (mid-turn user input), sandbox, `SubagentV2` with toolset-level read-only guarantee.
 
 ### Agent loop data flow
 ```
 User input → AgentRuntime.run() → ReAct loop:
-  1. ToolEngine.execute(tool_call)
+  1. HookManager.dispatch_pre_tool_use() → may BLOCK or MODIFY args
+  2. ToolEngine.execute(tool_call)
      → Guardian risk assessment (if enabled)
      → LLM review (if risk above threshold)
      → Confirmation callback (if autonomy="always_ask")
      → Tool dispatch
-  2. Stream result via on_event sink (PENDING → MODIFY/APPROVE/REJECT)
+  3. HookManager.dispatch_post_tool_use() → informational audit/log
+  4. Stream result via on_event sink (PENDING → MODIFY/APPROVE/REJECT)
+  5. CheckpointManager.auto_checkpoint() → snapshot state
 ```
+
+### Hook system (`clew/hook_system.py`)
+Process-wide `HookManager` singleton with three event types:
+- `pre_tool_use` — before tool execution. Can BLOCK or MODIFY args.
+- `post_tool_use` — after tool execution. Informational only.
+- `user_prompt_submit` — before prompt goes to LLM. Can BLOCK or MODIFY prompt.
+
+User hooks: Python modules in `~/.clew/hooks/*.py` with `register_hooks(manager)`. Config persistence in `~/.clew/hooks.json`. Thread-safe (RLock + snapshot pattern).
+
+### Checkpoint / rewind system (`clew/checkpoint.py`)
+`CheckpointManager` snapshots conversation state + file changes at each turn:
+- Auto-checkpoint after every agent turn (configurable).
+- Manual checkpoint via `/checkpoint save [label]`.
+- Rewind via `/rewind <n>` restores file backups + conversation position.
+- File backups stored in `~/.clew/checkpoints/<session>/backups/<cp_id>/`.
+- SHA-256 checksums for integrity verification. Max 200 checkpoints per session.
 
 ### Guardian system (`clew/agent/guardian.py`)
 LLM-based safety reviewer for risky tool calls. Activated by `/guardian <level>`:
@@ -45,11 +65,17 @@ LLM-based safety reviewer for risky tool calls. Activated by `/guardian <level>`
 
 Risk is rule-based (file paths, shell commands). MODIFY verdict shows 3-button modal (Approve / Reject / Use Fix) with proposed alternative args.
 
+### GitHub automation (`clew/github_automation.py`)
+REST API client for PR/issue operations. Uses GitHub token from `GITHUB_TOKEN` env or `~/.clew/github_token`. Supports: list/get/create PRs, list/get/create issues, comment, get PR diff, build implementation context (`/github pr <num> implement`), generate GitHub Action templates. Rate limit retry with backoff. Auto-detect repo from git remote URL.
+
+### MCP server mode (`clew/mcp_server.py`)
+Exposes Clew's tools via MCP protocol so other agents can call Clew as a tool provider. JSON-RPC 2.0 over stdio with Content-Length framing. Read-only mode (default) or write mode (`--mcp-allow-writes`). Entry point: `clew-acp --mcp-server`.
+
 ### Provider system (`clew/providers/`)
 16 providers indexed by `ProviderRegistry` (`registry.py`). Each implements `generate(messages)` → `ProviderResponse`. `AutoRouter` selects the best provider per task.
 
 ### Web bridge vs TUI bridge
-- **Web bridge** (`clew/web_bridge.py`): QObject exposed via QWebChannel. Owns `AgentRuntime`. Emits Qt signals → JS callbacks.
+- **Web bridge** (`clew/web_bridge/bridge.py`): QObject exposed via QWebChannel. Owns `AgentRuntime`. Emits Qt signals → JS callbacks.
 - **TUI bridge** (`clew_tui/bridge.py`): plain Python. Owns `AgentRuntime`. Routes events via `EventSink` callback.
 
 ### Key architectural constraints
@@ -109,6 +135,11 @@ Risk is rule-based (file paths, shell commands). MODIFY verdict shows 3-button m
 | **G6** | **Post-task "bridge" (CMS/editable handoff)** ✅ | "After task delivery, no interface for edits without a developer" | Vibe coders / Non-technical |
 | **G7** | **Capability catalog / templates** ✅ | "Don't know what I can ask the agent to do" | Vibe coders / Non-technical |
 | **G8** | **Polished TUI/GUI, fast bug fixes** | "Long-lived UI bugs = disrespect" | All groups |
+| **G9** | **Hook system at tool level** ✅ | "Cannot intercept specific tool calls for audit/security" | Enterprise/Security, Power users |
+| **G10** | **Checkpoint / rewind** ✅ | "No way to undo agent mistakes — once it writes, it's permanent" | All groups |
+| **G11** | **GitHub-native automation** ✅ | "No PR/issue integration — must manually context-switch" | Developers, Enterprise |
+| **G13** | **MCP server capability** ✅ | "Clew cannot BE an MCP server for other agents" | Multi-agent users, Enterprise |
+| **G14** | **Comprehensive test coverage** ✅ | "~7% coverage is dangerous for security-critical code" | All groups |
 
 ### Provider System Enhancement Goals: ✅ **COMPLETED**
 - **User-custom providers**: Config file (`~/.clew/providers.yaml`) + dynamic class loading from `~/.clew/providers/` (plugin-style). Auto-register in `ProviderRegistry` and `AutoRouter`. Works in both TUI (via `ClewBridge.list_providers()`/`set_provider()`) and GUI (via web bridge `list_providers`/`set_provider` slots).
@@ -142,17 +173,30 @@ Risk is rule-based (file paths, shell commands). MODIFY verdict shows 3-button m
 ### M3 — Team spend dashboard
 **Files:** `clew/spend_dashboard.py` (480+ lines), `clew_tui/bridge.py` (8 methods), `clew_tui/app.py` (`/spend` slash command with 7 subcommands: team|budget|sources|add|json|csv|identity), `clew/web_bridge/bridge.py` (8 GUI slots). Aggregates `token_history.jsonl` entries into a `TeamSpendReport` with totals + by_user + by_provider + by_model + by_day breakdowns. Local user identity in `~/.clew/identity.json` (user_id, name, team). Team budget in `~/.clew/team_budget.json` (monthly_usd, alert_pct). Multi-source aggregation — accepts files or directories of `*.jsonl`. CSV/JSON export. Privacy: email only included if user opts in (`share_email: true`). Local-only — no network.
 
-## Gap Analysis — New Goals from Clew_Gap_Analysis.md (2026-07-28)
+## v2.0.3 (2026-07-29) — G9, G10, G11, G13, G14 ✅ COMPLETED
 
-### Missing Features (Gaps vs. Competitors)
+### G9 — Hook system at tool level
+**Files:** `clew/hook_system.py` (370+ lines), `clew_tui/bridge.py` (6 methods), `clew_tui/app.py` (`/hooks` slash command with 5 subcommands: list|enable|disable|remove|test|stats), `clew/web_bridge/bridge.py` (5 GUI slots). Process-wide `HookManager` singleton with three event types: `pre_tool_use` (BLOCK/MODIFY/ALLOW before tool execution), `post_tool_use` (informational after tool execution), `user_prompt_submit` (BLOCK/MODIFY before LLM call). Hooks registered via user Python modules in `~/.clew/hooks/*.py` (auto-loaded at startup) or programmatically. Config persistence via `~/.clew/hooks.json`. Thread-safe (RLock + snapshot pattern). Priority ordering — lower runs first. `HookEvent.data` dict enables cross-hook communication within one dispatch. Dry-run testing via `test_hook()` API.
+
+### G10 — Checkpoint / rewind
+**Files:** `clew/checkpoint.py` (380+ lines), `clew_tui/bridge.py` (8 methods), `clew_tui/app.py` (`/checkpoint` slash command with 3 subcommands: save|auto|stats, `/rewind` slash command), `clew/web_bridge/bridge.py` (8 GUI slots). `CheckpointManager` snapshots conversation messages + file state at each turn. File backups stored in `~/.clew/checkpoints/<session>/backups/<cp_id>/<rel_path>` with SHA-256 checksums. Auto-checkpoint after every agent turn (toggleable via `/checkpoint auto off|on`). Manual checkpoint via `/checkpoint save [label]`. Rewind via `/rewind <n>` restores files and returns message_count for conversation trimming. Rewind to specific checkpoint via `/rewind to <id>`. Diff comparison between checkpoints. Max 200 checkpoints per session (oldest evicted). Partial rewind (continues even if backup files are missing).
+
+### G11 — GitHub-native automation
+**Files:** `clew/github_automation.py` (530+ lines), `clew_tui/bridge.py` (13 methods), `clew_tui/app.py` (`/github` slash command with 8 subcommands: auth|repo|detect|prs|pr|issues|issue|action), `clew/web_bridge/bridge.py` (13 GUI slots). REST API client over GitHub v3 API using urllib (no external dependency). Authentication via `GITHUB_TOKEN` env or `~/.clew/github_token`. Operations: list/get/create PRs, list/get/create issues, comment on PRs/issues, get PR diff, build implementation context (`/github pr <num> implement` returns a structured prompt with PR title + body + diff + comments), generate GitHub Action workflow YAML templates (pull_request, push, workflow_dispatch triggers). Rate limit retry with exponential backoff. Auto-detect repo from git remote URL (supports https and ssh formats). Fails on 401/404 with clear error messages.
+
+### G13 — MCP server capability
+**Files:** `clew/mcp_server.py` (430+ lines). `MCPServerMode` exposes Clew's tools via MCP protocol (JSON-RPC 2.0 over stdio with Content-Length framing). Read-only mode by default (10 safe tools: read_file, list_files, search_project, grep, glob, file_info, get_project_structure, get_skill, search_tools, select_tools). Write mode with `--mcp-allow-writes` adds 11 more tools (write_file, str_replace, apply_diff, etc.). Custom tool set with `--tools` flag. Entry point: `clew-acp --mcp-server --workspace /path/to/project`. Programmatic API: `list_tools()`, `call_tool()`, `status()`. MCP protocol version `2024-11-05`. Server name `clew-mcp-server`, version `2.0.3`. Handles `initialize`, `initialized`, `tools/list`, `tools/call`, `ping`. Routes tool calls to `ToolEngine.execute()`. Workspace sandbox enforcement. No telemetry.
+
+### G14 — Comprehensive test coverage
+**Files:** `clew/tests/test_g9_hook_system.py` (200+ lines, 15 tests), `clew/tests/test_g10_checkpoint.py` (170+ lines, 14 tests), `clew/tests/test_g11_github_automation.py` (180+ lines, 12 tests), `clew/tests/test_g13_mcp_server.py` (130+ lines, 11 tests), `clew/tests/test_g14_sandbox_guardian.py` (100+ lines, 10 tests), `clew/tests/test_g14_agent_runtime.py` (150+ lines, 20 tests), `clew/tests/test_g14_providers.py` (120+ lines, 15 tests). Total: ~950 new test lines across 7 files, ~97 new test cases. Coverage areas: Hook System (registration, dispatch, priority, BLOCK/MODIFY/ALLOW, config persistence, user modules), Checkpoint (creation, file backup, rewind, diff, auto-checkpoint, max limit, partial recovery), GitHub (token management, repo detection, PR/issue CRUD, API error handling, rate limiting, action templates), MCP Server (tool availability, read-only/write mode, tool dispatch, JSON-RPC framing, schema validation), Sandbox/Guardian (command whitelisting, section gating, role whitelist, risk levels), Agent Runtime (ToolEngine dispatch, ContextMemory, SQLitePersistence, OutputParser, types, progressive tools, activity log, provider registry), Providers (base class, registry, individual providers, custom providers, AutoRouter, TokenTracker, TokenBudget). All tests use pytest fixture pattern with singleton reset for isolation.
+
+## Gap Analysis — Remaining Goals
+
+### Still Missing (not yet implemented)
 | Priority | Gap | Description | Notes |
 |----------|-----|-------------|-------|
-| **G9** | **Hook system at tool level** | PreToolUse/PostToolUse/UserPromptSubmit hooks for audit and enforcement policies | Currently only plugin system for routes/providers/JS-CSS — cannot intercept specific tool calls |
-| **G10** | **Checkpoint / rewind** | Rollback dialogue state and file changes | No `checkpoint`/`rewind` found in codebase |
-| **G11** | **GitHub-native automation** | `@codex implement issue`, GitHub Action `claude -p` on every PR | `git_service.py` only has local `status/diff/stage/commit/branch/log` — no PR/issue automation |
 | **G12** | **Cloud/background execution** | Offload tasks to containers, close laptop | Agent always runs locally in real-time |
-| **G13** | **MCP server capability** | Clew connects to external MCP servers but cannot BE an MCP server | Would enable Clew as a tool provider for other agents |
-| **G14** | **Comprehensive test coverage** | ~7% coverage (2,960 test lines / 43,200 source lines, 9 test files / 128 modules) | Thin for security-critical code (sandbox, guardian) — **need many more tests** |
+| **G8** | **Polished TUI/GUI, fast bug fixes** | "Long-lived UI bugs = disrespect" | Ongoing maintenance task |
 
 ### Unique Strengths to Leverage (Clew-Only Differentiators)
 | Strength | Current Status | Monetization Angle |
@@ -170,46 +214,27 @@ Risk is rule-based (file paths, shell commands). MODIFY verdict shows 3-button m
 
 ### Updated Upcoming Goals (Priority-Ordered)
 
-**7. Hook System at Tool Level (G9)**
-- PreToolUse / PostToolUse / UserPromptSubmit callbacks
-- Enable audit policies, auto-formatters, security scanners
-- Design: event bus in `clew/agent_runtime/` + registration API in `ClewBridge`
+**1. Cloud/Background Execution (G12)**
+- Offload tasks to containers
+- Close laptop, task continues
+- Requires Docker/container infra + task queue
 
-**8. Checkpoint / Rewind (G10)**
-- Snapshot conversation + file state at each turn
-- `/checkpoint` and `/rewind <n>` slash commands
-- Leverage existing SQLite persistence (`clew/session/sqlite_persistence.py`)
+**2. Polished TUI/GUI (G8) — ongoing**
+- Fix long-lived UI bugs
+- Improve accessibility and responsiveness
+- Snapshot tests for widgets
 
-**9. GitHub-Native Automation (G11)**
-- Extend `git_service.py` with PR/issue operations
-- GitHub Action template for `clew-cli` on PR events
-- `/github pr <num> implement` style commands
-
-**10. MCP Server Mode (G13)**
-- Expose Clew's tools via MCP protocol
-- Other agents (Claude Code, Codex) can call Clew as a tool provider
-- Leverages existing tool definitions + `clew/progressive_tools.py`
-
-**11. Comprehensive Test Coverage (G14) — HIGH PRIORITY**
-- Goal: Increase test coverage from ~7% to >50% for security-critical modules
-- **Sandbox/Guardian**: Property-based tests, fuzzing, integration tests with real providers
-- **Agent runtime**: Scenario tests covering ReAct loop edge cases
-- **Providers**: Contract tests for all 16 providers + custom provider loading
-- **TUI/GUI**: Snapshot tests for widgets, E2E tests for slash commands
-- **Collaboration modes**: Multi-agent scenario tests
-- Target: `pytest clew/` with >80% coverage on `clew/agent/`, `clew/agent_runtime/`, `clew/providers/`
-
-**12. Multi-Provider Consensus Engine (G15)**
+**3. Multi-Provider Consensus Engine (G15)**
 - Parallel execution on 2–3 providers for complex tasks
 - Diff visualization between approaches
 - Configurable consensus threshold
 
-**13. Cryptographic Audit Trail (G16)**
+**4. Cryptographic Audit Trail (G16)**
 - Sign each tool call result with local Ed25519 key
 - Hash-chain across session for tamper evidence
 - Export verified audit logs for compliance
 
-**14. Automatic Learning Loop (G17)**
+**5. Automatic Learning Loop (G17)**
 - Hook into git history (detect `git reset --hard`, reverted commits)
 - Hook into CI results (parse failed test output)
 - Auto-generate `learnings/` entries with context

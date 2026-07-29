@@ -40,6 +40,7 @@ from ..diff_utils import (
     _compute_diff_text,
     _backup_file as _backup_file_func,
 )
+from clew.activity_log import get_activity_log
 
 logger = logging.getLogger(__name__)
 
