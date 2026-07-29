@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clew — Native AI Coding IDE</title>
-<meta name="description" content="Clew is an open-source native AI coding IDE. 15 providers, ReAct agents, MCP support, zero telemetry. Runs on macOS, Windows, and Linux.">
+<meta name="description" content="Clew is an open-source native AI coding IDE. 16 providers, ReAct agents, TUI + GUI, MCP support, zero telemetry. Runs on macOS, Windows, and Linux.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -135,6 +135,7 @@ section{padding:88px 0}
 .provider-chip{padding:8px 14px;background:var(--surface);border:1px solid var(--border-soft);border-radius:100px;font-size:.82rem;font-weight:500;color:var(--text-dim);font-family:var(--mono);transition:border-color .2s}
 .provider-chip:hover{border-color:var(--border)}
 .provider-chip.local{border-color:var(--accent-soft-border);color:var(--text)}
+.provider-chip.custom{border-color:var(--green-soft);color:var(--green)}
 
 /* ---- HOW IT WORKS ---- */
 .how-it-works{background:var(--bg-alt)}
@@ -248,7 +249,7 @@ footer{padding:36px 0}
     <div>
       <div class="hero-badge"><span></span> Open source &middot; MIT</div>
       <h1>The native AI coding IDE that <span class="accent-word">plans before it acts</span></h1>
-      <p>Clew describes what it's about to do, then does it &mdash; one visible step at a time. 15 providers, ReAct agents, MCP support, zero telemetry. Your code never leaves your machine.</p>
+      <p>Clew describes what it's about to do, then does it &mdash; one visible step at a time. 16 providers, TUI + GUI, ReAct agents, MCP support, zero telemetry. Your code never leaves your machine.</p>
       <div class="hero-buttons">
         <a href="https://github.com/ilyaosovskoi/Clew/releases/latest" target="_blank" rel="noopener" class="btn btn-primary">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -261,7 +262,7 @@ footer{padding:36px 0}
       </div>
       <div class="hero-meta">
         <div>macOS &middot; Windows &middot; Linux</div>
-        <div>Cloud <strong>&amp;</strong> local models</div>
+        <div>Cloud <strong>&</strong> local models</div>
         <div>Built <strong>in the open</strong></div>
       </div>
     </div>
@@ -291,8 +292,8 @@ footer{padding:36px 0}
   <div class="container">
     <div class="section-header">
       <div class="section-label">The Promise</div>
-      <h2 class="section-title">Cursor + LM Studio + Multi-API Gateway, in one app</h2>
-      <p class="section-desc">No Python dependencies to install. No telemetry. Absolute privacy for local models, with the flexibility to plug in cloud APIs.</p>
+      <h2 class="section-title">Cursor + LM Studio + Multi-API Gateway + TUI, in one app</h2>
+      <p class="section-desc">No Python dependencies to install. No telemetry. Absolute privacy for local models, with the flexibility to plug in cloud APIs. Two frontends: Qt GUI and Textual TUI.</p>
     </div>
     <div class="promise-grid">
       <div class="promise-card fade-in">
@@ -300,12 +301,12 @@ footer{padding:36px 0}
         <p>Local models run 100% on-device. No telemetry, no tracking, no cloud unless you want it.</p>
       </div>
       <div class="promise-card fade-in">
-        <h3>15 AI Providers</h3>
-        <p>Anthropic, OpenAI, Gemini, DeepSeek, Groq, xAI, z.ai, or run Llama/Mistral/Qwen locally via Ollama or LM Studio.</p>
+        <h3>16 AI Providers</h3>
+        <p>Anthropic, OpenAI, Gemini, DeepSeek, Groq, xAI, z.ai, Nvidia NIM, or run Llama/Mistral/Qwen locally via Ollama or LM Studio. Plus 200+ via OpenRouter.</p>
       </div>
       <div class="promise-card fade-in">
-        <h3>Native Performance</h3>
-        <p>Qt-powered desktop app with real-time streaming, instant file search, live token tracking.</p>
+        <h3>Dual Frontend</h3>
+        <p>Qt-powered desktop app with real-time streaming, plus Textual TUI for terminal workflows. Switch seamlessly.</p>
       </div>
     </div>
   </div>
@@ -332,14 +333,14 @@ footer{padding:36px 0}
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         </div>
         <h3>Any model, one interface</h3>
-        <p>15 cloud providers or models on your own machine through Ollama and LM Studio. Switch the active model without leaving the project.</p>
+        <p>16 cloud providers or models on your own machine through Ollama, LM Studio, or Nvidia NIM. Switch the active model without leaving the project.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         </div>
         <h3>Budget guardrails</h3>
-        <p>Token usage, cost per provider, and burn rate, tracked live. Set a monthly limit and see where you stand &mdash; no surprise bills.</p>
+        <p>Token usage, cost per provider, and burn rate, tracked live. Set daily/monthly limits, enable predictable mode for deterministic token usage.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
@@ -366,14 +367,14 @@ footer{padding:36px 0}
         <div class="feature-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.2-.3-.4-.7-.4-1.1 0-.8.7-1.5 1.5-1.5H16c3.3 0 6-2.7 6-6 0-5-4.5-9-10-9z"/></svg>
         </div>
-        <h3>Plugins &amp; Skills</h3>
+        <h3>Plugins & Skills</h3>
         <p>Drop .py plugins for custom providers and API routes. SKILL.md packages guide agent behavior with YAML frontmatter activation.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M11 18H8a2 2 0 01-2-2V9"/></svg>
         </div>
-        <h3>Git &amp; Memory</h3>
+        <h3>Git & Memory</h3>
         <p>Built-in git tools: status, diff, stage, commit. Cross-chat memory with structured metadata so prior sessions inform new ones.</p>
       </div>
       <div class="feature-card fade-in">
@@ -382,6 +383,34 @@ footer{padding:36px 0}
         </div>
         <h3>LSP Integration</h3>
         <p>Python language server for autocomplete, hover, go-to-definition, and diagnostics &mdash; all running in a background thread.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        </div>
+        <h3>Guardian Safety</h3>
+        <p>LLM-based safety reviewer for risky tool calls. Three levels: off, dangerous-only, all. Shows 3-button modal (Approve / Reject / Use Fix) with proposed alternatives.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <h3>Capability Catalog</h3>
+        <p>20+ pre-built templates across 9 categories (code, refactor, test, debug, document, review, deploy, office, learn). Run via <code>/capabilities</code> with placeholder substitution.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="M15 5l5 5"/></svg>
+        </div>
+        <h3>Cross-Model Verification</h3>
+        <p>Second Opinion (Pro): ask a different model family to review risky actions. Verify last response: cross-family verifier checks correctness, safety, completeness after agent answers.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3>Custom Providers</h3>
+        <p>Add your own OpenAI-compatible endpoints via YAML config (~/.clew/providers.yaml) or drop Python plugins in ~/.clew/providers/. Hot-reload without restart.</p>
       </div>
     </div>
   </div>
@@ -409,7 +438,7 @@ footer{padding:36px 0}
         <tbody>
           <tr>
             <td>Native desktop</td>
-            <td class="clew-col">Qt/PySide6, offline-capable</td>
+            <td class="clew-col">Qt/PySide6 + Textual TUI, offline-capable</td>
             <td>Web/Electron</td>
             <td>Electron</td>
             <td>Electron</td>
@@ -430,14 +459,14 @@ footer{padding:36px 0}
           </tr>
           <tr>
             <td>Provider count</td>
-            <td class="clew-col">15 native + 200+ via OpenRouter</td>
+            <td class="clew-col">16 native + 200+ via OpenRouter + custom</td>
             <td>5&ndash;10</td>
             <td>3&ndash;5</td>
             <td>1 (Anthropic)</td>
           </tr>
           <tr>
             <td>MCP Protocol</td>
-            <td class="yes">Built-in client &amp; manager</td>
+            <td class="yes">Built-in client & manager</td>
             <td>Plugin</td>
             <td class="no">No</td>
             <td class="yes">Yes</td>
@@ -458,15 +487,43 @@ footer{padding:36px 0}
           </tr>
           <tr>
             <td>Plugin system</td>
-            <td class="yes">Custom providers, routes, JS/CSS</td>
+            <td class="yes">Custom providers, routes, skills</td>
             <td class="no">No</td>
             <td class="no">No</td>
             <td class="no">No</td>
           </tr>
           <tr>
             <td>Live token tracking</td>
-            <td class="yes">Real-time, per-provider quotas</td>
+            <td class="yes">Real-time, per-provider quotas, budgets</td>
             <td class="partial">Basic</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Guardian safety</td>
+            <td class="yes">LLM reviewer, 3-level, fix suggestions</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Cross-model verification</td>
+            <td class="yes">Second Opinion + Verify response</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Capability catalog</td>
+            <td class="yes">20+ templates, 9 categories</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>TUI frontend</td>
+            <td class="yes">Textual, full feature parity</td>
+            <td class="no">No</td>
             <td class="no">No</td>
             <td class="no">No</td>
           </tr>
@@ -489,7 +546,7 @@ footer{padding:36px 0}
     <div class="section-header">
       <div class="section-label">Providers</div>
       <h2 class="section-title">Bring the model you already trust</h2>
-      <p class="section-desc">Add a key for the providers you use, or skip the cloud entirely and run everything on your own hardware.</p>
+      <p class="section-desc">Add a key for the providers you use, or skip the cloud entirely and run everything on your own hardware. Custom providers supported via YAML or Python plugins.</p>
     </div>
     <div class="provider-group-label">Cloud</div>
     <div class="providers-grid fade-in">
@@ -506,11 +563,17 @@ footer{padding:36px 0}
       <div class="provider-chip">xAI</div>
       <div class="provider-chip">Cerebras</div>
       <div class="provider-chip">SambaNova</div>
+      <div class="provider-chip">Nvidia NIM</div>
     </div>
     <div class="provider-group-label">Local</div>
     <div class="providers-grid fade-in">
       <div class="provider-chip local">Ollama</div>
       <div class="provider-chip local">LM Studio</div>
+    </div>
+    <div class="provider-group-label">Custom</div>
+    <div class="providers-grid fade-in">
+      <div class="provider-chip custom">OpenAI-compatible (YAML)</div>
+      <div class="provider-chip custom">Python plugin</div>
     </div>
     <p style="text-align:center;color:var(--text-dimmer);font-size:.82rem;margin-top:8px;font-family:var(--mono)">...and 200+ more models via OpenRouter gateway</p>
   </div>
@@ -528,17 +591,17 @@ footer{padding:36px 0}
       <div class="step fade-in">
         <div class="step-num">01</div>
         <h3>Install Clew</h3>
-        <p>Download the native app for macOS, Windows, or Linux from the latest GitHub release. Requires Python 3.11+.</p>
+        <p>Download the native app for macOS, Windows, or Linux from the latest GitHub release. Requires Python 3.11+. Or <code>pip install -e .</code> from source.</p>
       </div>
       <div class="step fade-in">
         <div class="step-num">02</div>
         <h3>Connect a model</h3>
-        <p>Paste an API key for any supported cloud provider, or point Clew at a local Ollama or LM Studio server. Auto-detection included.</p>
+        <p>Paste an API key for any supported cloud provider, or point Clew at a local Ollama, LM Studio, or Nvidia NIM server. Auto-detection included. Add custom providers via YAML or Python plugins.</p>
       </div>
       <div class="step fade-in">
         <div class="step-num">03</div>
         <h3>Describe the task</h3>
-        <p>Open a project and tell Clew what you need in plain language. Review the plan, then let the agent read, write, and execute code.</p>
+        <p>Open a project in the GUI (<code>clew</code>) or TUI (<code>clew_tui</code>) and tell Clew what you need in plain language. Review the plan, then let the agent read, write, and execute code.</p>
       </div>
     </div>
   </div>
@@ -555,6 +618,7 @@ footer{padding:36px 0}
     <div class="tech-badges fade-in">
       <div class="tech-badge">Python 3.11+</div>
       <div class="tech-badge">PySide6 / Qt 6.6+</div>
+      <div class="tech-badge">Textual (TUI)</div>
       <div class="tech-badge">HTML5 / JS / CSS</div>
       <div class="tech-badge">SQLite</div>
       <div class="tech-badge">python-lsp-server</div>
@@ -574,11 +638,11 @@ footer{padding:36px 0}
     </div>
     <div class="roadmap-grid fade-in">
       <div class="roadmap-col">
-        <h3>Done</h3>
+        <h3>Done (v2.0.1)</h3>
         <ul class="roadmap-list">
           <li>
             <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Multi-provider support (15 + OpenRouter)
+            Multi-provider support (16 + OpenRouter + custom)
           </li>
           <li>
             <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
@@ -590,7 +654,7 @@ footer{padding:36px 0}
           </li>
           <li>
             <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Smart context &amp; Git integration
+            Smart context & Git integration
           </li>
           <li>
             <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
@@ -598,7 +662,35 @@ footer{padding:36px 0}
           </li>
           <li>
             <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Live token tracking &amp; daily quotas
+            Live token tracking & daily/monthly budgets
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Guardian safety reviewer (3 levels)
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Capability catalog (20 templates, 9 categories)
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Cross-model Second Opinion & Verification
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            TUI frontend (Textual) with full feature parity
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Nvidia NIM provider + custom provider system
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Collaboration modes (Reviewer, Codegen, Pair, Observer)
+          </li>
+          <li>
+            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            SQLite persistence + request serialization queues
           </li>
         </ul>
       </div>
@@ -607,11 +699,39 @@ footer{padding:36px 0}
         <ul class="roadmap-list">
           <li>
             <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Multi-agent "Heavy Code" mode
+            Agent identity + tool-call audit (G5)
           </li>
           <li>
             <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Voice mode &mdash; speak tasks, hear explanations
+            Post-task bridge: CMS/editable handoff (G6)
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Polished TUI/GUI, fast bug fixes (G8)
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            More agent tools (web_fetch, web_search, notebook_edit, image_generation, terminal_interact, database_query)
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Shared session state for seamless TUI↔GUI switching
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Smart cost-aware AutoRouter (free/paid modes)
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Team spend dashboard
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            OAuth: SharePoint/Drive/OneDrive integration
+          </li>
+          <li>
+            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Audit trail export (hash-chain + signature)
           </li>
           <li>
             <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
@@ -619,7 +739,7 @@ footer{padding:36px 0}
           </li>
           <li>
             <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Team collaboration &amp; shared sessions
+            Team collaboration & shared sessions
           </li>
         </ul>
       </div>

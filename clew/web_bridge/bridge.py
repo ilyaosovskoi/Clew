@@ -3479,6 +3479,307 @@ class ClewBridge(QObject):
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    # ── v2.0.2 (G5) — Agent identity + tool-call audit ────────────
+
+    @Slot(result='QVariantMap')
+    def get_agent_identity(self):
+        """Return the root agent identity for this Clew process."""
+        try:
+            from ..agent_identity import get_root_identity
+            ident = get_root_identity()
+            return {"ok": True, **ident.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(result='QVariantList')
+    def list_agents(self):
+        """Return every agent that has acted in this process, with stats."""
+        try:
+            from ..agent_identity import get_audit_trail
+            return get_audit_trail().list_agents()
+        except Exception:
+            return []
+
+    @Slot(str, result='QVariantMap')
+    def get_agent_audit_summary(self, agent_id):
+        """Per-agent breakdown of tool calls, errors, durations.
+
+        Empty ``agent_id`` means 'return the full summary' (keyed by
+        agent id).
+        """
+        try:
+            from ..agent_identity import get_audit_trail
+            aid = agent_id or None
+            summary = get_audit_trail().agent_summary(agent_id=aid)
+            return {"ok": True, "summary": summary}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, bool, int, result='QVariantMap')
+    def filter_audit_by_agent(self, agent_id, include_children, limit):
+        try:
+            from ..agent_identity import get_audit_trail
+            entries = get_audit_trail().filter_by_agent(
+                agent_id=agent_id, include_children=bool(include_children),
+                limit=int(limit) if limit else 200,
+            )
+            return {"ok": True, "entries": entries, "count": len(entries)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(bool, result='QVariantMap')
+    def export_audit_json(self, with_fingerprints):
+        try:
+            from ..agent_identity import get_audit_trail
+            return {"ok": True,
+                    "json": get_audit_trail().export_audit_json(
+                        with_fingerprints=bool(with_fingerprints))}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(result='QVariantMap')
+    def export_audit_csv(self):
+        try:
+            from ..agent_identity import get_audit_trail
+            return {"ok": True, "csv": get_audit_trail().export_audit_csv()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, str, result='QVariantMap')
+    def spawn_subidentity(self, role, name):
+        try:
+            from ..agent_identity import get_root_identity
+            ident = get_root_identity().child(role=role, name=name)
+            return {"ok": True, **ident.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.0.2 (G6) — Post-task handoff ───────────────────────────
+
+    @Slot(str, str, str, result='QVariantMap')
+    def create_handoff(self, output, prompt, title):
+        """Parse an agent output into an editable HandoffDocument and persist."""
+        try:
+            from ..handoff_bridge import parse_agent_output, get_handoff_store
+            from ..agent_identity import get_root_identity
+            agent_ident = get_root_identity().to_dict()
+            doc = parse_agent_output(
+                output=output or "", prompt=prompt or "",
+                agent=agent_ident, title=title or "",
+            )
+            get_handoff_store().save(doc)
+            return {"ok": True, "doc": doc.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(int, result='QVariantList')
+    def list_handoffs(self, limit):
+        try:
+            from ..handoff_bridge import get_handoff_store
+            return get_handoff_store().list_docs(limit=int(limit) if limit else 50)
+        except Exception:
+            return []
+
+    @Slot(str, result='QVariantMap')
+    def get_handoff(self, doc_id):
+        try:
+            from ..handoff_bridge import get_handoff_store
+            doc = get_handoff_store().load(doc_id)
+            return doc.to_dict() if doc else {"ok": False, "error": "not found"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, str, str, str, str, result='QVariantMap')
+    def set_handoff_block_status(self, doc_id, block_id, status, comment, replacement):
+        try:
+            from ..handoff_bridge import get_handoff_store
+            doc = get_handoff_store().set_block_status(
+                doc_id=doc_id, block_id=block_id, status=status,
+                comment=comment or "", replacement=replacement or "",
+            )
+            if doc is None:
+                return {"ok": False, "error": f"Handoff {doc_id} not found"}
+            return {"ok": True, "doc": doc.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, str, result='QVariantMap')
+    def toggle_handoff_todo(self, doc_id, block_id):
+        try:
+            from ..handoff_bridge import get_handoff_store
+            doc = get_handoff_store().toggle_todo(doc_id, block_id)
+            if doc is None:
+                return {"ok": False, "error": "not found"}
+            return {"ok": True, "doc": doc.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result=bool)
+    def delete_handoff(self, doc_id):
+        try:
+            from ..handoff_bridge import get_handoff_store
+            return bool(get_handoff_store().delete(doc_id))
+        except Exception:
+            return False
+
+    @Slot(str, result='QVariantMap')
+    def build_handoff_revision_prompt(self, doc_id):
+        try:
+            from ..handoff_bridge import get_handoff_store
+            prompt = get_handoff_store().build_revision_prompt(doc_id)
+            return {"ok": True, "prompt": prompt}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def export_handoff_markdown(self, doc_id):
+        try:
+            from ..handoff_bridge import get_handoff_store
+            md = get_handoff_store().export_markdown(doc_id)
+            if not md:
+                return {"ok": False, "error": "not found"}
+            return {"ok": True, "markdown": md}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.0.2 (M2) — Cost-aware provider routing ────────────────
+
+    @Slot(result='QVariantMap')
+    def get_cost_router_config(self):
+        try:
+            from ..cost_router import get_cost_router
+            cfg = get_cost_router().get_config()
+            return {"ok": True, **cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def set_cost_router_config(self, updates_json):
+        """Update cost-router config. ``updates_json`` is a JSON object
+        with any of: enabled, budget_pressure_high, budget_pressure_critical,
+        error_rate_threshold, error_window, prefer_free_under_pressure,
+        caps_usd (dict)."""
+        try:
+            from ..cost_router import get_cost_router
+            updates = json.loads(updates_json) if updates_json else {}
+            cfg = get_cost_router().update_config(**updates)
+            return {"ok": True, **cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, float, result='QVariantMap')
+    def set_cost_cap(self, complexity, usd):
+        try:
+            from ..cost_router import get_cost_router
+            cfg = get_cost_router().set_cap(complexity, float(usd))
+            return {"ok": True, **cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def cost_route(self, prompt):
+        """Run the cost-aware router on a prompt; return the decision."""
+        try:
+            from ..cost_router import get_cost_router
+            configured = {p["id"] for p in self._registry.list_providers()
+                          if p.get("configured") or p.get("id") in ("ollama", "lmstudio")}
+            decision = get_cost_router().route(
+                prompt=prompt, configured_providers=configured,
+            )
+            return {"ok": True, **decision.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.0.2 (M3) — Team spend dashboard ────────────────────────
+
+    @Slot(result='QVariantMap')
+    def get_user_identity(self):
+        try:
+            from ..spend_dashboard import load_identity
+            ident = load_identity()
+            return {"ok": True, **ident.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def set_user_team(self, team):
+        try:
+            from ..spend_dashboard import set_team
+            ident = set_team(team)
+            return {"ok": True, **ident.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def get_team_budget(self, team):
+        try:
+            from ..spend_dashboard import load_team_budget, load_identity
+            t = team or load_identity().team
+            budget = load_team_budget(t)
+            return {"ok": True, **budget.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, float, float, result='QVariantMap')
+    def set_team_budget(self, team, monthly_usd, alert_pct):
+        try:
+            from ..spend_dashboard import load_team_budget, save_team_budget, load_identity
+            t = team or load_identity().team
+            budget = load_team_budget(t)
+            budget.monthly_usd = float(monthly_usd)
+            budget.alert_pct = float(alert_pct)
+            save_team_budget(budget)
+            return {"ok": True, **budget.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(int, result='QVariantMap')
+    def get_team_spend_report(self, days):
+        try:
+            from ..spend_dashboard import get_spend_dashboard
+            report = get_spend_dashboard().report(days=int(days) if days else 30)
+            return {"ok": True, **report.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def add_spend_source(self, path):
+        try:
+            from ..spend_dashboard import get_spend_dashboard
+            from pathlib import Path as _P
+            get_spend_dashboard().add_source(_P(path))
+            return {"ok": True, "sources": get_spend_dashboard().list_sources()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(result='QVariantMap')
+    def list_spend_sources(self):
+        try:
+            from ..spend_dashboard import get_spend_dashboard
+            return {"ok": True, "sources": get_spend_dashboard().list_sources()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(int, result='QVariantMap')
+    def export_spend_report_json(self, days):
+        try:
+            from ..spend_dashboard import get_spend_dashboard
+            return {"ok": True,
+                    "json": get_spend_dashboard().export_report_json(
+                        days=int(days) if days else 30)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(int, result='QVariantMap')
+    def export_spend_report_csv(self, days):
+        try:
+            from ..spend_dashboard import get_spend_dashboard
+            return {"ok": True,
+                    "csv": get_spend_dashboard().export_report_csv(
+                        days=int(days) if days else 30)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     # ── Cleanup ───────────────────────────────────────────────────
 
     def cleanup(self) -> None:

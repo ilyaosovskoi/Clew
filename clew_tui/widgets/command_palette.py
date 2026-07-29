@@ -61,6 +61,23 @@ BUILTIN_COMMANDS: List[CommandEntry] = [
     CommandEntry("context", "/context", "View context fragments & compaction stats", "info", False),
     # v2.0.0 — Progressive tools catalog
     CommandEntry("tools", "/tools", "Browse loaded & available progressive tools", "info", False),
+    # v2.0.1 (G7) — Capability catalog
+    CommandEntry("capabilities", "/capabilities", "Browse & run pre-built capability templates", "action", True),
+    # v2.0.1 (M1) — Second Opinion
+    CommandEntry("second_opinion", "/second_opinion", "Configure cross-model Second Opinion (Pro)", "toggle", False),
+    # v2.0.1 (G3) — Token budget
+    CommandEntry("budget", "/budget", "Configure token budget & efficiency policy", "toggle", False),
+    # v2.0.1 (G4) — Cross-model verification
+    CommandEntry("verify", "/verify", "Cross-model verification of the last response", "action", False),
+    # v2.0.2 (G5) — Agent identity + tool-call audit
+    CommandEntry("agents", "/agents", "List agents + their audit stats (G5)", "info", False),
+    CommandEntry("audit", "/audit", "Export audit trail JSON / CSV (G5)", "info", False),
+    # v2.0.2 (G6) — Post-task handoff
+    CommandEntry("handoff", "/handoff", "Create / edit / list handoff docs (G6)", "action", True),
+    # v2.0.2 (M2) — Cost-aware provider routing
+    CommandEntry("cost", "/cost", "Cost-aware provider routing (M2)", "toggle", False),
+    # v2.0.2 (M3) — Team spend dashboard
+    CommandEntry("spend", "/spend", "Team spend dashboard (M3)", "info", False),
 ]
 
 

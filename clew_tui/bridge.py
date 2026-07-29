@@ -1107,3 +1107,379 @@ class ClewBridge:
             }
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    # ── v2.0.2 (G5) — Agent identity + tool-call audit ────────────
+
+    def get_agent_identity(self) -> Dict[str, Any]:
+        """Return the root agent identity for this Clew process."""
+        try:
+            from clew.agent_identity import get_root_identity
+            ident = get_root_identity()
+            return {"ok": True, **ident.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def list_agents(self) -> List[Dict[str, Any]]:
+        """Return every agent that has acted in this process, with stats."""
+        try:
+            from clew.agent_identity import get_audit_trail
+            trail = get_audit_trail()
+            return trail.list_agents()
+        except Exception:
+            return []
+
+    def get_agent_audit_summary(self, agent_id: Optional[str] = None) -> Dict[str, Any]:
+        """Per-agent breakdown of tool calls, errors, durations.
+
+        If ``agent_id`` is None, returns the full per-agent summary
+        (keyed by agent id). Otherwise returns only that agent's row.
+        """
+        try:
+            from clew.agent_identity import get_audit_trail
+            trail = get_audit_trail()
+            summary = trail.agent_summary(agent_id=agent_id)
+            return {"ok": True, "summary": summary}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def filter_audit_by_agent(
+        self, agent_id: str, include_children: bool = True, limit: int = 200,
+    ) -> Dict[str, Any]:
+        """Return audit entries attributed to ``agent_id`` (and optionally
+        its descendant agents)."""
+        try:
+            from clew.agent_identity import get_audit_trail
+            trail = get_audit_trail()
+            entries = trail.filter_by_agent(
+                agent_id=agent_id,
+                include_children=include_children,
+                limit=limit,
+            )
+            return {"ok": True, "entries": entries, "count": len(entries)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def export_audit_json(self, with_fingerprints: bool = True) -> Dict[str, Any]:
+        """Export the full audit trail as JSON (with optional SHA-256 fingerprints)."""
+        try:
+            from clew.agent_identity import get_audit_trail
+            trail = get_audit_trail()
+            return {
+                "ok": True,
+                "json": trail.export_audit_json(with_fingerprints=with_fingerprints),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def export_audit_csv(self) -> Dict[str, Any]:
+        """Export the audit trail as CSV (compact, no large args)."""
+        try:
+            from clew.agent_identity import get_audit_trail
+            trail = get_audit_trail()
+            return {"ok": True, "csv": trail.export_audit_csv()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def spawn_subidentity(self, role: str, name: str = "") -> Dict[str, Any]:
+        """Derive a child AgentIdentity from the root (for subagent attribution).
+
+        Returns the new identity dict (does NOT spawn an actual agent —
+        the runtime is responsible for using the returned identity when
+        recording subsequent tool calls).
+        """
+        try:
+            from clew.agent_identity import get_root_identity
+            ident = get_root_identity().child(role=role, name=name)
+            return {"ok": True, **ident.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.0.2 (G6) — Post-task handoff (CMS / editable) ──────────
+
+    def create_handoff(
+        self,
+        output: str,
+        prompt: str = "",
+        title: str = "",
+        agent_identity: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Parse an agent output into an editable HandoffDocument and persist it.
+
+        Returns {ok, doc} where ``doc`` is the full handoff dict
+        (id, title, blocks, ...). Use ``set_handoff_block_status`` to
+        edit individual blocks, and ``build_handoff_revision_prompt``
+        to compile the user's edits into a follow-up agent prompt.
+        """
+        try:
+            from clew.handoff_bridge import parse_agent_output, get_handoff_store
+            # Default to the root agent identity if none given.
+            if agent_identity is None:
+                try:
+                    from clew.agent_identity import get_root_identity
+                    agent_identity = get_root_identity().to_dict()
+                except Exception:
+                    agent_identity = {}
+            doc = parse_agent_output(
+                output=output, prompt=prompt, agent=agent_identity, title=title,
+            )
+            get_handoff_store().save(doc)
+            return {"ok": True, "doc": doc.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def list_handoffs(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Return metadata for saved handoff documents (no block contents)."""
+        try:
+            from clew.handoff_bridge import get_handoff_store
+            return get_handoff_store().list_docs(limit=limit)
+        except Exception:
+            return []
+
+    def get_handoff(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch the full handoff document (with blocks) by id."""
+        try:
+            from clew.handoff_bridge import get_handoff_store
+            doc = get_handoff_store().load(doc_id)
+            return doc.to_dict() if doc else None
+        except Exception:
+            return None
+
+    def set_handoff_block_status(
+        self,
+        doc_id: str,
+        block_id: str,
+        status: str,
+        comment: str = "",
+        replacement: str = "",
+    ) -> Dict[str, Any]:
+        """Update a single handoff block's status / comment / replacement."""
+        try:
+            from clew.handoff_bridge import get_handoff_store
+            doc = get_handoff_store().set_block_status(
+                doc_id=doc_id, block_id=block_id, status=status,
+                comment=comment, replacement=replacement,
+            )
+            if doc is None:
+                return {"ok": False, "error": f"Handoff {doc_id} not found"}
+            return {"ok": True, "doc": doc.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def toggle_handoff_todo(self, doc_id: str, block_id: str) -> Dict[str, Any]:
+        """Flip a todo block's checked state."""
+        try:
+            from clew.handoff_bridge import get_handoff_store
+            doc = get_handoff_store().toggle_todo(doc_id, block_id)
+            if doc is None:
+                return {"ok": False, "error": f"Handoff or block not found"}
+            return {"ok": True, "doc": doc.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def reorder_handoff_blocks(
+        self, doc_id: str, new_order: List[str],
+    ) -> Dict[str, Any]:
+        """Reorder blocks by id."""
+        try:
+            from clew.handoff_bridge import get_handoff_store
+            doc = get_handoff_store().reorder_blocks(doc_id, new_order)
+            if doc is None:
+                return {"ok": False, "error": f"Handoff {doc_id} not found"}
+            return {"ok": True, "doc": doc.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def delete_handoff(self, doc_id: str) -> Dict[str, Any]:
+        try:
+            from clew.handoff_bridge import get_handoff_store
+            ok = get_handoff_store().delete(doc_id)
+            return {"ok": ok}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def build_handoff_revision_prompt(self, doc_id: str) -> Dict[str, Any]:
+        """Compile the user's edits into a structured revision prompt.
+
+        Returns {ok, prompt}. ``prompt`` is "" if there are no pending
+        revisions. The caller (TUI/GUI) typically feeds this back to
+        ``run_prompt`` so the agent addresses the user's edits.
+        """
+        try:
+            from clew.handoff_bridge import get_handoff_store
+            prompt = get_handoff_store().build_revision_prompt(doc_id)
+            return {"ok": True, "prompt": prompt}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def export_handoff_markdown(self, doc_id: str) -> Dict[str, Any]:
+        """Render a handoff document as a single Markdown string."""
+        try:
+            from clew.handoff_bridge import get_handoff_store
+            md = get_handoff_store().export_markdown(doc_id)
+            if not md:
+                return {"ok": False, "error": f"Handoff {doc_id} not found"}
+            return {"ok": True, "markdown": md}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.0.2 (M2) — Smart cost-aware provider routing ───────────
+
+    def get_cost_router_config(self) -> Dict[str, Any]:
+        """Return the current cost-router configuration."""
+        try:
+            from clew.cost_router import get_cost_router
+            cfg = get_cost_router().get_config()
+            return {"ok": True, **cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_cost_router_config(self, **kwargs: Any) -> Dict[str, Any]:
+        """Patch one or more cost-router config fields."""
+        try:
+            from clew.cost_router import get_cost_router
+            cfg = get_cost_router().update_config(**kwargs)
+            return {"ok": True, **cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_cost_cap(self, complexity: str, usd: float) -> Dict[str, Any]:
+        """Set the USD cap for a single complexity tier."""
+        try:
+            from clew.cost_router import get_cost_router
+            cfg = get_cost_router().set_cap(complexity, usd)
+            return {"ok": True, **cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def cost_route(
+        self,
+        prompt: str,
+        configured_providers: Optional[set] = None,
+    ) -> Dict[str, Any]:
+        """Run the cost-aware router on a prompt and return the decision."""
+        try:
+            from clew.cost_router import get_cost_router
+            # Build configured_providers from the registry if not supplied.
+            if configured_providers is None and self._registry is not None:
+                configured_providers = {
+                    p["id"] for p in self._registry.list_providers()
+                    if p.get("configured") or p.get("id") in ("ollama", "lmstudio")
+                }
+            decision = get_cost_router().route(
+                prompt=prompt, configured_providers=configured_providers,
+            )
+            return {"ok": True, **decision.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def apply_cost_route_decision(
+        self,
+        prompt: str,
+        configured_providers: Optional[set] = None,
+    ) -> Dict[str, Any]:
+        """Run cost routing AND apply the resulting provider/model selection.
+
+        This is what the runtime should call BEFORE dispatching a prompt
+        if cost-aware routing is enabled. It sets the active provider on
+        the registry and returns the decision so the UI can show it.
+        """
+        try:
+            decision = self.cost_route(prompt, configured_providers)
+            if not decision.get("ok"):
+                return decision
+            final = decision.get("final_pick") or {}
+            pid = final.get("provider_id")
+            model = final.get("model")
+            if pid:
+                self.set_provider(pid, model or None)
+            return decision
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.0.2 (M3) — Team spend dashboard ────────────────────────
+
+    def get_user_identity(self) -> Dict[str, Any]:
+        """Return the local user identity (creates a default if absent)."""
+        try:
+            from clew.spend_dashboard import load_identity
+            ident = load_identity()
+            return {"ok": True, **ident.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_user_team(self, team: str) -> Dict[str, Any]:
+        """Update the local user's team and persist."""
+        try:
+            from clew.spend_dashboard import set_team
+            ident = set_team(team)
+            return {"ok": True, **ident.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get_team_budget(self, team: Optional[str] = None) -> Dict[str, Any]:
+        """Return the team's monthly USD budget (0 = no cap)."""
+        try:
+            from clew.spend_dashboard import load_team_budget
+            if team is None:
+                from clew.spend_dashboard import load_identity
+                team = load_identity().team
+            budget = load_team_budget(team)
+            return {"ok": True, **budget.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_team_budget(
+        self, monthly_usd: float, team: Optional[str] = None, alert_pct: float = 80.0,
+    ) -> Dict[str, Any]:
+        """Set the team's monthly USD budget."""
+        try:
+            from clew.spend_dashboard import load_team_budget, save_team_budget, load_identity
+            if team is None:
+                team = load_identity().team
+            budget = load_team_budget(team)
+            budget.monthly_usd = float(monthly_usd)
+            budget.alert_pct = float(alert_pct)
+            save_team_budget(budget)
+            return {"ok": True, **budget.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get_team_spend_report(self, days: int = 30) -> Dict[str, Any]:
+        """Aggregate the local token history into a team spend report."""
+        try:
+            from clew.spend_dashboard import get_spend_dashboard
+            report = get_spend_dashboard().report(days=days)
+            return {"ok": True, **report.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def add_spend_source(self, path: str) -> Dict[str, Any]:
+        """Add a token_history.jsonl source (file or directory of *.jsonl)."""
+        try:
+            from clew.spend_dashboard import get_spend_dashboard
+            from pathlib import Path as _P
+            get_spend_dashboard().add_source(_P(path))
+            return {"ok": True, "sources": get_spend_dashboard().list_sources()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def list_spend_sources(self) -> Dict[str, Any]:
+        try:
+            from clew.spend_dashboard import get_spend_dashboard
+            return {"ok": True, "sources": get_spend_dashboard().list_sources()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def export_spend_report_json(self, days: int = 30) -> Dict[str, Any]:
+        try:
+            from clew.spend_dashboard import get_spend_dashboard
+            return {"ok": True, "json": get_spend_dashboard().export_report_json(days=days)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def export_spend_report_csv(self, days: int = 30) -> Dict[str, Any]:
+        try:
+            from clew.spend_dashboard import get_spend_dashboard
+            return {"ok": True, "csv": get_spend_dashboard().export_report_csv(days=days)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}

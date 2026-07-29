@@ -42,7 +42,7 @@ class ClewTUIApp(App):
     def __init__(self, bridge: Optional[ClewBridge] = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.bridge = bridge or ClewBridge()
-        self._running = False
+        self._turn_running = False
         self._last_prompt: str = ""
         self._suggestions_active: bool = False
         self._dark_theme: bool = True  # Start with dark theme
@@ -134,7 +134,7 @@ class ClewTUIApp(App):
         already intercepted Enter."""
         if not prompt:
             return
-        if self._running:
+        if self._turn_running:
             self.bell()
             return
 
@@ -159,7 +159,7 @@ class ClewTUIApp(App):
         box.value = ""
         self.query_one(ChatLog).add_user(prompt)
         self._last_prompt = prompt
-        self._running = True
+        self._turn_running = True
         self._refresh_status("thinking")
         self._run_turn(prompt)
 
@@ -203,7 +203,7 @@ class ClewTUIApp(App):
             box.remember(prompt)
             self.query_one(ChatLog).add_user(prompt)
             self._last_prompt = expanded
-            self._running = True
+            self._turn_running = True
             self._refresh_status("thinking")
             self._run_turn(expanded)
             return
@@ -263,6 +263,16 @@ class ClewTUIApp(App):
             self._exec_verify(arg)
         elif cmd == "/budget":
             self._exec_budget(arg)
+        elif cmd == "/agents":
+            self._exec_agents(arg)
+        elif cmd == "/audit":
+            self._exec_audit(arg)
+        elif cmd == "/handoff":
+            self._exec_handoff(arg)
+        elif cmd == "/cost":
+            self._exec_cost(arg)
+        elif cmd == "/spend":
+            self._exec_spend(arg)
         else:
             self.query_one(ChatLog).add_system(
                 f"Unknown command: {cmd}. Type /help for available commands."
@@ -553,6 +563,11 @@ class ClewTUIApp(App):
             "  [cyan]/second_opinion[/cyan] Toggle cross-model review before risky actions (Pro)",
             "  [cyan]/verify[/cyan]    Cross-model verification of the last response",
             "  [cyan]/budget[/cyan]    Configure token budget & efficiency policy",
+            "  [cyan]/agents[/cyan]    List agents + their audit stats (G5)",
+            "  [cyan]/audit[/cyan]     Export audit trail JSON / CSV (G5)",
+            "  [cyan]/handoff[/cyan]   Create / edit / list handoff docs (G6)",
+            "  [cyan]/cost[/cyan]      Cost-aware provider routing (M2)",
+            "  [cyan]/spend[/cyan]     Team spend dashboard (M3)",
             "  [cyan]/gui[/cyan]       Launch the Clew GUI window",
             "  [cyan]/help[/cyan]      Show this help",
             "",
@@ -658,7 +673,7 @@ class ClewTUIApp(App):
         # Render the task as a user message, then run collaboration in a worker
         chat = self.query_one(ChatLog)
         chat.add_user(f"[collab:{mode}] {task}")
-        self._running = True
+        self._turn_running = True
         self._refresh_status("thinking")
         self._run_collaboration(mode, task)
 
@@ -674,7 +689,7 @@ class ClewTUIApp(App):
         chat = self.query_one(ChatLog)
         if not result.get("ok"):
             chat.add_error(f"Collaboration failed: {result.get('error', 'unknown')}")
-            self._running = False
+            self._turn_running = False
             self._refresh_status("idle")
             return
         output = result.get("output", "") or ""
@@ -689,7 +704,7 @@ class ClewTUIApp(App):
         observer_warnings = metadata.get("observer_warnings") or []
         if observer_warnings:
             chat.add_observer_warnings(observer_warnings)
-        self._running = False
+        self._turn_running = False
         self._refresh_status("idle")
         self.query_one(InputBox).focus()
 
@@ -922,7 +937,7 @@ class ClewTUIApp(App):
             f"[dim](filled template — placeholders: {dict(values) or 'none'})[/dim]"
         )
         self._last_prompt = prompt
-        self._running = True
+        self._turn_running = True
         self._refresh_status("thinking")
         self._run_turn(prompt)
 
@@ -1120,7 +1135,7 @@ class ClewTUIApp(App):
             /verify <provider_id>            — use a specific provider
             /verify <provider_id> <model>    — use a specific provider + model
         """
-        if self._running:
+        if self._turn_running:
             self.query_one(ChatLog).add_system(
                 "Wait for the current turn to finish before running /verify."
             )
@@ -1167,6 +1182,674 @@ class ClewTUIApp(App):
 
     def _after_verify_modal(self) -> None:
         """Called after the verification modal is dismissed."""
+        self.query_one(InputBox).focus()
+
+    # ── v2.0.2 (G5) — Agent identity + audit ──────────────────────
+
+    def _exec_agents(self, arg: str) -> None:
+        """List every agent that has acted in this process, with audit stats.
+
+        Usage:
+            /agents            — list all agents
+            /agents <agent_id> — show entries produced by one agent
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+        if arg:
+            # Show entries for one agent
+            r = self.bridge.filter_audit_by_agent(arg, include_children=True)
+            if not r.get("ok"):
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+                self.query_one(InputBox).focus()
+                return
+            entries = r.get("entries") or []
+            if not entries:
+                chat.add_system(f"No audit entries found for agent [b]{arg}[/b].")
+            else:
+                lines = [f"[b]Audit entries for agent {arg}[/b]  ({r.get('count', 0)} entries)", ""]
+                for e in entries[-25:]:
+                    ts = e.get("ts_iso", "")
+                    tool = e.get("tool") or e.get("kind") or "?"
+                    status = e.get("status", "?")
+                    title = (e.get("title") or "")[:80]
+                    lines.append(f"  [{ts}]  {tool}  [{status}]  {title}")
+                if r.get("count", 0) > 25:
+                    lines.append(f"  ... and {r.get('count', 0) - 25} more (showing last 25)")
+                chat.add_system("\n".join(lines))
+            self.query_one(InputBox).focus()
+            return
+
+        agents = self.bridge.list_agents()
+        ident = self.bridge.get_agent_identity()
+        if not agents:
+            chat.add_system(
+                "[b]Agents[/b]  (no activity yet)\n"
+                f"  Root agent id: [dim]{ident.get('id', '?')}[/dim]  role: {ident.get('role', '?')}"
+            )
+            self.query_one(InputBox).focus()
+            return
+        lines = [
+            f"[b]Agents in this process[/b]  (root: {ident.get('id', '?')})",
+            "",
+            f"  {'ID':<18}  {'Role':<12}  {'Calls':>6}  {'Errs':>5}  {'Reject':>6}  {'Dur(ms)':>8}  Name",
+            f"  {'-'*18}  {'-'*12}  {'-'*6}  {'-'*5}  {'-'*6}  {'-'*8}  {'-'*20}",
+        ]
+        for a in agents:
+            lines.append(
+                f"  {a['id']:<18}  {a['role']:<12}  {a['tool_calls']:>6}  "
+                f"{a['errors']:>5}  {a['rejections']:>6}  "
+                f"{a['total_duration_ms']:>8}  {a.get('name', '')}"
+            )
+        chat.add_system("\n".join(lines))
+        self.query_one(InputBox).focus()
+
+    def _exec_audit(self, arg: str) -> None:
+        """Export the audit trail.
+
+        Usage:
+            /audit             — show summary + first 20 entries
+            /audit json        — print the full JSON export
+            /audit csv         — print the CSV export
+            /audit verify      — re-verify SHA-256 fingerprints (integrity check)
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip().lower()
+        if arg == "json":
+            r = self.bridge.export_audit_json(with_fingerprints=True)
+            if r.get("ok"):
+                chat.add_system(f"[b]Audit JSON export[/b]\n```json\n{r.get('json', '')[:8000]}\n```")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        if arg == "csv":
+            r = self.bridge.export_audit_csv()
+            if r.get("ok"):
+                chat.add_system(f"[b]Audit CSV export[/b]\n```csv\n{r.get('csv', '')[:8000]}\n```")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        if arg == "verify":
+            from clew.agent_identity import get_audit_trail
+            trail = get_audit_trail()
+            with trail._log._lock:
+                entries = list(trail._log._entries)
+            ok = 0
+            bad = 0
+            for e in entries:
+                fp = e.get("fingerprint")
+                if not fp:
+                    # In-memory entries don't have fingerprints; only exports do.
+                    continue
+                if trail.verify_fingerprint(e):
+                    ok += 1
+                else:
+                    bad += 1
+            chat.add_system(
+                f"[b]Audit integrity check[/b]\n"
+                f"  Verified OK:      {ok}\n"
+                f"  Tampered entries: {bad}"
+            )
+            self.query_one(InputBox).focus()
+            return
+        # Default: summary
+        summary = self.bridge.get_agent_audit_summary()
+        if not summary.get("ok"):
+            chat.add_error(f"Failed: {summary.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        s = summary.get("summary") or {}
+        if not s:
+            chat.add_system("[b]Audit Trail[/b]\n  No entries yet.")
+        else:
+            lines = ["[b]Audit Trail Summary[/b]  (per-agent)", ""]
+            for aid, row in s.items():
+                lines.append(
+                    f"  [cyan]{aid}[/cyan]  ({row.get('role', '?')})  "
+                    f"calls: {row.get('tool_calls', 0)}  "
+                    f"errors: {row.get('errors', 0)}  "
+                    f"rejects: {row.get('rejections', 0)}  "
+                    f"dur: {row.get('total_duration_ms', 0)}ms"
+                )
+            lines.append("")
+            lines.append("  Use [cyan]/audit json[/cyan] or [cyan]/audit csv[/cyan] to export.")
+            chat.add_system("\n".join(lines))
+        self.query_one(InputBox).focus()
+
+    # ── v2.0.2 (G6) — Post-task handoff ───────────────────────────
+
+    def _exec_handoff(self, arg: str) -> None:
+        """Create / list / edit / export handoff documents.
+
+        Usage:
+            /handoff                       — list saved handoffs
+            /handoff create                — parse the LAST agent response into a handoff
+            /handoff show <doc_id>         — show blocks + statuses
+            /handoff accept <doc> <block>  — accept a block
+            /handoff reject <doc> <block> [comment]
+            /handoff edit <doc> <block> <replacement text...>
+            /handoff todo <doc> <block>    — toggle a todo block
+            /handoff revisions <doc>       — compile revisions into a prompt
+            /handoff markdown <doc>        — export as Markdown
+            /handoff delete <doc>
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+        if not arg:
+            docs = self.bridge.list_handoffs(limit=50)
+            if not docs:
+                chat.add_system(
+                    "[b]Handoffs[/b]\n"
+                    "  No saved handoffs.\n\n"
+                    "  Use [cyan]/handoff create[/cyan] to parse the last agent response into an editable handoff."
+                )
+            else:
+                lines = ["[b]Handoffs[/b]  (~/.clew/handoffs/)", ""]
+                for d in docs:
+                    lines.append(
+                        f"  [{d['id']}]  {d.get('title', 'Untitled')[:60]}\n"
+                        f"     blocks: {d.get('block_count', 0)}  "
+                        f"updated: {d.get('updated_at', '?')}"
+                    )
+                lines.append("")
+                lines.append("  Use [cyan]/handoff show <id>[/cyan] to view blocks.")
+                chat.add_system("\n".join(lines))
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split(None, 1)
+        sub = parts[0].lower()
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "create":
+            # Grab the last assistant message
+            last_output = ""
+            try:
+                cl = self.query_one(ChatLog)
+                # ChatLog doesn't expose messages; use the bridge's
+                # memory if available, else fall back to a hint.
+                agent = self.bridge._agent
+                if agent is not None:
+                    for m in reversed(agent.memory.messages):
+                        if getattr(m, "role", "") == "assistant" and getattr(m, "content", ""):
+                            last_output = m.content
+                            break
+            except Exception:
+                pass
+            if not last_output:
+                chat.add_error("No prior assistant response to convert into a handoff.")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.create_handoff(
+                output=last_output,
+                prompt=self._last_prompt or "",
+                title=self._last_prompt[:60] if self._last_prompt else "Untitled handoff",
+            )
+            if r.get("ok"):
+                doc = r.get("doc") or {}
+                chat.add_system(
+                    f"[b]Handoff created:[/b] {doc.get('id')}\n"
+                    f"  Title: {doc.get('title', 'Untitled')}\n"
+                    f"  Blocks: {len(doc.get('blocks') or [])}\n\n"
+                    f"  Use [cyan]/handoff show {doc.get('id')}[/cyan] to view and edit blocks."
+                )
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "show":
+            if not rest:
+                chat.add_system("Usage: /handoff show <doc_id>")
+                self.query_one(InputBox).focus()
+                return
+            doc = self.bridge.get_handoff(rest)
+            if doc is None:
+                chat.add_error(f"Handoff not found: {rest}")
+                self.query_one(InputBox).focus()
+                return
+            lines = [
+                f"[b]Handoff: {doc.get('title', 'Untitled')}[/b]  (id: {doc.get('id')})",
+                f"  Created: {doc.get('created_at', '?')}  Updated: {doc.get('updated_at', '?')}",
+                "",
+            ]
+            for i, b in enumerate(doc.get("blocks") or [], 1):
+                status = b.get("status", "pending")
+                tag = {"pending": "[dim]pending[/dim]",
+                       "accepted": "[green]accepted[/green]",
+                       "rejected": "[red]rejected[/red]",
+                       "edited": "[yellow]edited[/yellow]"}.get(status, status)
+                btype = b.get("type", "?")
+                path = b.get("path", "")
+                path_str = f"  [dim]{path}[/dim]" if path else ""
+                lines.append(f"  {i}. [{btype}]  {tag}{path_str}  id={b.get('id')}")
+                content = (b.get("content") or "")
+                preview = content[:200].replace("\n", " ")
+                if preview:
+                    lines.append(f"     [dim]{preview}[/dim]")
+                if b.get("comment"):
+                    lines.append(f"     [italic]comment: {b['comment']}[/italic]")
+            lines.append("")
+            lines.append(
+                "  Edit with: [cyan]/handoff accept|reject|edit|todo[/cyan] <doc> <block_id>"
+            )
+            chat.add_system("\n".join(lines))
+            self.query_one(InputBox).focus()
+            return
+
+        if sub in ("accept", "reject"):
+            # /handoff accept <doc> <block_id>
+            args = rest.split(None, 1)
+            if len(args) < 2:
+                chat.add_system(f"Usage: /handoff {sub} <doc_id> <block_id> [comment]")
+                self.query_one(InputBox).focus()
+                return
+            doc_id, block_and_comment = args[0], args[1]
+            comment = ""
+            if " " in block_and_comment:
+                block_id, comment = block_and_comment.split(None, 1)
+            else:
+                block_id = block_and_comment
+            r = self.bridge.set_handoff_block_status(
+                doc_id=doc_id, block_id=block_id,
+                status="accepted" if sub == "accept" else "rejected",
+                comment=comment,
+            )
+            if r.get("ok"):
+                chat.add_system(f"Block [b]{block_id}[/b] marked [b]{sub}[/b].")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "edit":
+            # /handoff edit <doc> <block_id> <replacement text>
+            args = rest.split(None, 2)
+            if len(args) < 3:
+                chat.add_system("Usage: /handoff edit <doc_id> <block_id> <replacement text>")
+                self.query_one(InputBox).focus()
+                return
+            doc_id, block_id, replacement = args[0], args[1], args[2]
+            r = self.bridge.set_handoff_block_status(
+                doc_id=doc_id, block_id=block_id,
+                status="edited", replacement=replacement,
+            )
+            if r.get("ok"):
+                chat.add_system(f"Block [b]{block_id}[/b] edited — replacement recorded.")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "todo":
+            args = rest.split(None, 1)
+            if len(args) < 2:
+                chat.add_system("Usage: /handoff todo <doc_id> <block_id>")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.toggle_handoff_todo(args[0], args[1])
+            if r.get("ok"):
+                chat.add_system(f"Todo block [b]{args[1]}[/b] toggled.")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "revisions":
+            if not rest:
+                chat.add_system("Usage: /handoff revisions <doc_id>")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.build_handoff_revision_prompt(rest)
+            if not r.get("ok"):
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+                self.query_one(InputBox).focus()
+                return
+            prompt = r.get("prompt") or ""
+            if not prompt:
+                chat.add_system("No pending revisions — every block is accepted.")
+            else:
+                chat.add_system(
+                    f"[b]Revision prompt for {rest}:[/b]\n\n" + prompt +
+                    "\n\n[dim]Send this back to the agent by typing a normal message, "
+                    "or use /handoff send <doc_id> to auto-dispatch.[/dim]"
+                )
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "markdown":
+            if not rest:
+                chat.add_system("Usage: /handoff markdown <doc_id>")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.export_handoff_markdown(rest)
+            if r.get("ok"):
+                chat.add_system(f"```markdown\n{r.get('markdown', '')}\n```")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "delete":
+            if not rest:
+                chat.add_system("Usage: /handoff delete <doc_id>")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.delete_handoff(rest)
+            if r.get("ok"):
+                chat.add_system(f"Handoff [b]{rest}[/b] deleted.")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        chat.add_system(
+            f"Unknown /handoff subcommand: {sub}\n"
+            "Subcommands: create | show | accept | reject | edit | todo | "
+            "revisions | markdown | delete"
+        )
+        self.query_one(InputBox).focus()
+
+    # ── v2.0.2 (M2) — Cost-aware provider routing ────────────────
+
+    def _exec_cost(self, arg: str) -> None:
+        """Cost-aware provider routing.
+
+        Usage:
+            /cost                       — show current config + budget pressure
+            /cost route <prompt text>   — run the router on a prompt
+            /cost cap <complexity> <usd>— set per-complexity USD cap
+            /cost enable on|off         — toggle cost-router master switch
+            /cost threshold high|critical <pct>
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+        if not arg:
+            cfg = self.bridge.get_cost_router_config()
+            if not cfg.get("ok"):
+                chat.add_error(f"Failed: {cfg.get('error', 'unknown')}")
+                self.query_one(InputBox).focus()
+                return
+            caps = cfg.get("caps_usd", {})
+            chat.add_system(
+                f"[b]Cost-Aware Router[/b]  (M2)\n"
+                f"  Enabled:          {'ON' if cfg.get('enabled') else 'OFF'}\n"
+                f"  Budget pressure:  HIGH ≥ {cfg.get('budget_pressure_high', 0)*100:.0f}%  "
+                f"CRITICAL ≥ {cfg.get('budget_pressure_critical', 0)*100:.0f}%\n"
+                f"  Error threshold:  {cfg.get('error_rate_threshold', 0)*100:.0f}% "
+                f"(window: {cfg.get('error_window', 0)} requests)\n"
+                f"  Prefer free under pressure: "
+                f"{'ON' if cfg.get('prefer_free_under_pressure') else 'OFF'}\n\n"
+                f"  [b]Per-complexity USD caps[/b]\n"
+                f"    trivial:   ${caps.get('trivial', 0):.4f}\n"
+                f"    simple:    ${caps.get('simple', 0):.4f}\n"
+                f"    moderate:  ${caps.get('moderate', 0):.4f}\n"
+                f"    complex:   ${caps.get('complex', 0):.4f}\n"
+                f"    expert:    ${caps.get('expert', 0):.4f}\n\n"
+                f"  Commands:\n"
+                f"    /cost route <prompt>\n"
+                f"    /cost cap <complexity> <usd>\n"
+                f"    /cost enable on|off\n"
+                f"    /cost threshold high|critical <pct>"
+            )
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split(None, 1)
+        sub = parts[0].lower()
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "route":
+            if not rest:
+                chat.add_system("Usage: /cost route <prompt text>")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.cost_route(rest)
+            if not r.get("ok"):
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+                self.query_one(InputBox).focus()
+                return
+            final = r.get("final_pick") or {}
+            factors = r.get("factors") or []
+            chat.add_system(
+                f"[b]Cost-aware routing decision[/b]\n"
+                f"  Prompt:          {r.get('prompt_preview', '')[:60]}...\n"
+                f"  Complexity:      {r.get('complexity', '?')}"
+                f"{'  (demoted from ' + r.get('demoted_from', '') + ')' if r.get('demoted_from') else ''}\n"
+                f"  Final pick:      [b]{final.get('provider_id', '?')}[/b] / "
+                f"[dim]{final.get('model', '?')}[/dim]\n"
+                f"  Est. cost:       ${r.get('estimated_cost_usd', 0):.4f}\n"
+                f"  Budget pressure: {r.get('budget_pressure', 0)*100:.0f}%  "
+                f"(remaining ${r.get('budget_remaining_usd', 0):.2f})\n"
+                f"  AutoRouter pick: {(r.get('auto_router_pick') or {}).get('provider_id', '?')} / "
+                f"{(r.get('auto_router_pick') or {}).get('model', '?')}\n\n"
+                f"  [b]Factors[/b]\n" +
+                "\n".join(f"    - {f}" for f in factors)
+            )
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "cap":
+            args = rest.split()
+            if len(args) < 2:
+                chat.add_system("Usage: /cost cap <complexity> <usd>\n"
+                                "  complexity: trivial|simple|moderate|complex|expert")
+                self.query_one(InputBox).focus()
+                return
+            complexity = args[0].lower()
+            valid = {"trivial", "simple", "moderate", "complex", "expert"}
+            if complexity not in valid:
+                chat.add_error(f"Invalid complexity: {complexity}. Valid: {', '.join(sorted(valid))}")
+                self.query_one(InputBox).focus()
+                return
+            try:
+                usd = float(args[1])
+            except ValueError:
+                chat.add_error(f"Invalid USD value: {args[1]}")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.set_cost_cap(complexity, usd)
+            if r.get("ok"):
+                chat.add_system(f"Cap for [b]{complexity}[/b] set to [b]${usd:.4f}[/b].")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "enable":
+            v = rest.lower() in ("on", "1", "true", "yes")
+            r = self.bridge.set_cost_router_config(enabled=v)
+            if r.get("ok"):
+                chat.add_system(f"Cost-aware router: [b]{'ON' if v else 'OFF'}[/b]")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "threshold":
+            args = rest.split()
+            if len(args) < 2 or args[0] not in ("high", "critical"):
+                chat.add_system("Usage: /cost threshold high|critical <pct>")
+                self.query_one(InputBox).focus()
+                return
+            try:
+                pct = float(args[1]) / 100.0
+            except ValueError:
+                chat.add_error(f"Invalid pct: {args[1]}")
+                self.query_one(InputBox).focus()
+                return
+            kwarg = {"budget_pressure_high": pct} if args[0] == "high" \
+                else {"budget_pressure_critical": pct}
+            r = self.bridge.set_cost_router_config(**kwarg)
+            if r.get("ok"):
+                chat.add_system(f"{args[0]} threshold set to [b]{args[1]}%[/b].")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        chat.add_system(
+            f"Unknown /cost subcommand: {sub}\n"
+            "Subcommands: route | cap | enable | threshold"
+        )
+        self.query_one(InputBox).focus()
+
+    # ── v2.0.2 (M3) — Team spend dashboard ────────────────────────
+
+    def _exec_spend(self, arg: str) -> None:
+        """Team spend dashboard.
+
+        Usage:
+            /spend                  — show team spend summary
+            /spend team <name>      — set local user's team
+            /spend budget <usd>     — set team monthly budget
+            /spend sources          — list token_history sources
+            /spend add <path>       — add a source (file or dir of *.jsonl)
+            /spend json|csv         — export report
+            /spend identity         — show local user identity
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+        if not arg:
+            r = self.bridge.get_team_spend_report(days=30)
+            if not r.get("ok"):
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+                self.query_one(InputBox).focus()
+                return
+            by_user = r.get("by_user") or []
+            by_provider = r.get("by_provider") or []
+            chat.add_system(
+                f"[b]Team Spend Dashboard[/b]  (team: {r.get('team', '?')})\n"
+                f"  Generated at:  {r.get('generated_at_iso', '?')}\n"
+                f"  Sources:       {r.get('sources_scanned', 0)}  "
+                f"Entries processed: {r.get('entries_processed', 0)}\n"
+                f"  Total cost:    [b]${r.get('total_cost_usd', 0):.4f}[/b]\n"
+                f"  Total tokens:  in={r.get('total_tokens_in', 0):,}  "
+                f"out={r.get('total_tokens_out', 0):,}\n"
+                f"  Requests:      {r.get('total_request_count', 0)}\n"
+                f"  Team budget:   ${r.get('team_budget_usd', 0):.2f}  "
+                f"used: {r.get('team_budget_used_pct', 0)}%\n"
+                f"  Top consumer:  {r.get('top_consumer_user_id', 'n/a')}\n\n"
+                f"  [b]By user[/b] (top 5)\n" +
+                "\n".join(
+                    f"    {u.get('user_id', '?')[:18]:<18}  "
+                    f"${u.get('cost_usd', 0):.4f}  "
+                    f"{u.get('request_count', 0)} reqs  "
+                    f"{u.get('name', '')}"
+                    for u in by_user[:5]
+                ) +
+                f"\n\n  [b]By provider[/b] (top 5)\n" +
+                "\n".join(
+                    f"    {p.get('provider', '?'):<18}  "
+                    f"${p.get('cost_usd', 0):.4f}  "
+                    f"{p.get('request_count', 0)} reqs"
+                    for p in by_provider[:5]
+                ) +
+                "\n\n  Commands: /spend team|budget|sources|add|json|csv|identity"
+            )
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split(None, 1)
+        sub = parts[0].lower()
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "team":
+            if not rest:
+                chat.add_system("Usage: /spend team <name>")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.set_user_team(rest)
+            if r.get("ok"):
+                chat.add_system(f"Local user team set to: [b]{rest}[/b]")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "budget":
+            if not rest:
+                chat.add_system("Usage: /spend budget <usd>")
+                self.query_one(InputBox).focus()
+                return
+            try:
+                usd = float(rest)
+            except ValueError:
+                chat.add_error(f"Invalid USD: {rest}")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.set_team_budget(usd)
+            if r.get("ok"):
+                chat.add_system(f"Team budget set to [b]${usd:.2f}/mo[/b].")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "sources":
+            r = self.bridge.list_spend_sources()
+            sources = r.get("sources") or []
+            if sources:
+                chat.add_system(
+                    "[b]Token history sources[/b]\n" +
+                    "\n".join(f"  - {s}" for s in sources)
+                )
+            else:
+                chat.add_system("No token history sources configured.")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "add":
+            if not rest:
+                chat.add_system("Usage: /spend add <path-to-jsonl-or-dir>")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.add_spend_source(rest)
+            if r.get("ok"):
+                chat.add_system(f"Source added. Now tracking: {len(r.get('sources', []))} sources.")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "json":
+            r = self.bridge.export_spend_report_json(days=30)
+            if r.get("ok"):
+                chat.add_system(f"```json\n{r.get('json', '')[:8000]}\n```")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "csv":
+            r = self.bridge.export_spend_report_csv(days=30)
+            if r.get("ok"):
+                chat.add_system(f"```csv\n{r.get('csv', '')[:8000]}\n```")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        if sub == "identity":
+            r = self.bridge.get_user_identity()
+            if r.get("ok"):
+                chat.add_system(
+                    f"[b]Local User Identity[/b]\n"
+                    f"  user_id: {r.get('user_id', '?')}\n"
+                    f"  name:    {r.get('name', '?')}\n"
+                    f"  team:    {r.get('team', '?')}\n"
+                    f"  email:   {r.get('email', '') or '(not shared)'}"
+                )
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        chat.add_system(
+            f"Unknown /spend subcommand: {sub}\n"
+            "Subcommands: team | budget | sources | add | json | csv | identity"
+        )
         self.query_one(InputBox).focus()
 
     # --------------------------------------------------------------- worker
@@ -1276,7 +1959,7 @@ class ClewTUIApp(App):
             plan_text = metadata.get("plan", "")
             chat.add_plan(plan_text)
             self._show_plan_approval(plan_text)
-            self._running = False
+            self._turn_running = False
             self._refresh_status("idle")
             return
 
@@ -1288,7 +1971,7 @@ class ClewTUIApp(App):
         else:
             err = getattr(result, "error", None) or output or "task failed"
             chat.add_error(str(err))
-        self._running = False
+        self._turn_running = False
         self._refresh_status("idle")
 
     def _show_plan_approval(self, plan_text: str) -> None:
@@ -1323,7 +2006,7 @@ class ClewTUIApp(App):
         if chat._streaming_active:
             chat.end_streaming()
         chat.add_error(message)
-        self._running = False
+        self._turn_running = False
         self._refresh_status("idle")
 
     def _refresh_status(self, state: str) -> None:
@@ -1339,7 +2022,7 @@ class ClewTUIApp(App):
 
     # ------------------------------------------------------------------ actions
     def action_interrupt(self) -> None:
-        if self._running:
+        if self._turn_running:
             self.bridge.request_stop()
             self.query_one(ChatLog).add_system("interrupt requested...")
         else:
