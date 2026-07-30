@@ -1180,6 +1180,120 @@ class ClewBridge:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    # ── v2.1.0 (G15) — Multi-provider consensus engine ────────────
+
+    def get_consensus_config(self) -> Dict[str, Any]:
+        """Return the current consensus engine config."""
+        try:
+            from clew.consensus_engine import get_consensus_config as _get
+            cfg = _get()
+            return {"ok": True, **cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_consensus_config(self, **kwargs: Any) -> Dict[str, Any]:
+        """Patch one or more consensus config fields.
+
+        Accepts: providers (tuple/list), min_agreement (float),
+        timeout_s (float), max_chars_per_response (int).
+        """
+        try:
+            from clew.consensus_engine import (
+                get_consensus_config, set_consensus_config,
+                ConsensusConfig,
+            )
+            current = get_consensus_config()
+            # Apply only the kwargs that are explicitly provided.
+            providers = kwargs.get("providers", current.providers)
+            if isinstance(providers, list):
+                providers = tuple(providers)
+            min_agreement = kwargs.get("min_agreement", current.min_agreement)
+            timeout_s = kwargs.get("timeout_s", current.timeout_s)
+            max_chars = kwargs.get("max_chars_per_response", current.max_chars_per_response)
+            new_cfg = ConsensusConfig(
+                providers=providers,
+                min_agreement=float(min_agreement),
+                timeout_s=float(timeout_s),
+                max_chars_per_response=int(max_chars),
+            )
+            set_consensus_config(new_cfg)
+            return {"ok": True, **new_cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def run_consensus(self, prompt: str) -> Dict[str, Any]:
+        """Run a prompt on 2–3 providers in parallel and return a
+        structured comparison. BLOCKING — callers should run this in
+        a worker thread (the TUI does this via @work).
+        """
+        try:
+            from clew.consensus_engine import run_consensus, render_report_text
+            # Determine active provider from the runtime's registry.
+            # The bridge stores its AgentRuntime as self._agent (see
+            # ClewBridge.__init__). AgentRuntime exposes .registry.
+            active_pid = ""
+            registry = None
+            try:
+                if self._agent is not None:
+                    registry = getattr(self._agent, "registry", None)
+                    if registry is not None:
+                        active_pid = getattr(registry, "active_id", "") or ""
+            except Exception:
+                pass
+            report = run_consensus(
+                prompt=prompt,
+                registry=registry,
+                active_provider_id=active_pid,
+            )
+            return {"ok": True, "text": render_report_text(report), "report": report.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.1.0 (G16) — Signed audit trail ─────────────────────────
+
+    def export_audit_signed_json(self) -> Dict[str, Any]:
+        """Export the current activity log as a signed + hash-chained
+        JSON string (G16). Each entry gets an Ed25519 signature over
+        its canonical payload + the previous entry's hash.
+        """
+        try:
+            from clew.activity_log import get_activity_log
+            log = get_activity_log()
+            signed = log.export_signed_json()
+            return {"ok": True, "signed_json": signed}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def verify_audit_signed_file(self, path: str) -> Dict[str, Any]:
+        """Verify a signed/chained audit export file (G16)."""
+        try:
+            from clew.audit_signing import verify_signed_file
+            report = verify_signed_file(path)
+            return {"ok": True, "report": report.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.1.0 (G17) — Automatic learning loop ────────────────────
+
+    def handle_learnings_command(self, workspace: str, arg: str) -> Dict[str, Any]:
+        """Handle the /learnings slash command (G17). Delegates to
+        clew.learning_loop.handle_learnings_command."""
+        try:
+            from clew.learning_loop import handle_learnings_command as _handle
+            return _handle(workspace, arg)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.1.0 (G18) — Web search backend status ──────────────────
+
+    def get_websearch_status(self) -> Dict[str, Any]:
+        """Return web search backend health + last probe results (G18)."""
+        try:
+            from clew.web_search_backend import get_websearch_status as _get
+            return {"ok": True, "status": _get()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def spawn_subidentity(self, role: str, name: str = "") -> Dict[str, Any]:
         """Derive a child AgentIdentity from the root (for subagent attribution).
 
@@ -1793,4 +1907,89 @@ class ClewBridge:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    # ── Notifier (G18) ─────────────────────────────────────────────
 
+    def notify_configure_backend(self, name: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Configure or update a notification backend."""
+        try:
+            from clew.notifier import get_notifier
+            return get_notifier().configure_backend(name, config)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def notify_set_enabled(self, name: str, enabled: bool) -> Dict[str, Any]:
+        """Enable or disable a notification backend."""
+        try:
+            from clew.notifier import get_notifier
+            return get_notifier().set_backend_enabled(name, enabled)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def notify_test(self, name: str) -> Dict[str, Any]:
+        """Send a test notification to a specific backend."""
+        try:
+            from clew.notifier import get_notifier
+            return get_notifier().test_backend(name)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def notify_test_all(self) -> Dict[str, Any]:
+        """Send test notifications to all configured backends."""
+        try:
+            from clew.notifier import get_notifier
+            return get_notifier().test_all()
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def notify_list_backends(self) -> List[Dict[str, Any]]:
+        """Return metadata for all configured notification backends."""
+        try:
+            from clew.notifier import get_notifier
+            return get_notifier().list_backends()
+        except Exception:
+            return []
+
+    def notify_set_events(self, name: str, events: List[str]) -> Dict[str, Any]:
+        """Set which event kinds trigger notifications for a backend."""
+        try:
+            from clew.notifier import get_notifier
+            return get_notifier().set_events(name, events)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def notify_status(self) -> Dict[str, Any]:
+        """Return overall notifier status."""
+        try:
+            from clew.notifier import get_notifier
+            return {"ok": True, **get_notifier().status()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def notify_remove_backend(self, name: str) -> Dict[str, Any]:
+        """Remove a notification backend configuration."""
+        try:
+            from clew.notifier import get_notifier
+            return get_notifier().remove_backend(name)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── Daemon (G18) ────────────────────────────────────────────────
+
+    def daemon_submit_task(self, prompt: str, workspace: str = "") -> Dict[str, Any]:
+        """Submit a task to the daemon's task queue."""
+        try:
+            from clew.daemon import TaskQueue
+            # If a daemon is running, submit to its queue
+            # Otherwise return an error suggesting to start the daemon
+            return {"ok": False, "error": "Daemon not running. Start with: clew-daemon"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def daemon_status(self) -> Dict[str, Any]:
+        """Return daemon status information."""
+        try:
+            from clew.daemon import load_daemon_config
+            config = load_daemon_config()
+            return {"ok": True, "configured": bool(config.get("auth_token"))}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}

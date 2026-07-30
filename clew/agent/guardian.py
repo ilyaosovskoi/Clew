@@ -111,6 +111,50 @@ def _normalise_command(cmd: Any) -> str:
     return str(cmd)
 
 
+# v2.1.0 (G18): web_fetch URL risk classifier. Used by assess_risk to
+# flag suspicious URLs as at-least-medium risk. Returns one of:
+# "" (clean), "secret" (secret-shaped param), "base64" (long base64-like
+# param), "too_long" (URL >2000 chars). Mirrors the same checks that
+# ToolEngine._web_fetch uses to REJECT the fetch outright — Guardian
+# flags the risk, the tool engine enforces the block.
+_SECRET_PARAM_NAMES = {
+    "api_key", "apikey", "token", "access_token",
+    "password", "passwd", "secret", "client_secret",
+}
+
+
+def _check_web_fetch_url(url: str) -> str:
+    """Return a risk classification for a web_fetch URL.
+
+    Returns:
+        "" — URL looks clean.
+        "secret" — URL contains a secret-shaped query param (api_key=,
+            token=, etc. with a non-trivial value). HIGH risk.
+        "base64" — URL has a query param with a long (>=80 char) base64-
+            like value. MEDIUM risk (could be benign encoded data, but
+            often injection or exfiltration).
+        "too_long" — URL is >2000 chars. MEDIUM risk (almost never
+            legitimate).
+    """
+    if not url:
+        return ""
+    if len(url) > 2000:
+        return "too_long"
+    if "?" not in url:
+        return ""
+    query = url.split("?", 1)[1]
+    for param in query.split("&"):
+        if "=" not in param:
+            continue
+        key, _, value = param.partition("=")
+        key_lower = key.lower()
+        if key_lower in _SECRET_PARAM_NAMES and len(value) >= 16:
+            return "secret"
+        if len(value) >= 80 and re.fullmatch(r"[A-Za-z0-9+/=_\-]+", value):
+            return "base64"
+    return ""
+
+
 def assess_risk(
     tool_name: str,
     args: dict[str, Any],
@@ -213,6 +257,46 @@ def assess_risk(
         elif level == "low":
             reasons.append(f"{tool_name} operation")
             level = "medium"
+
+    # v2.1.0 (G18): web tools — untrusted external content risk.
+    # web_fetch introduces a risk class the rule-based scorer didn't
+    # cover before: content fetched from the internet can contain
+    # instructions that look like user commands (prompt injection) or
+    # can be used to exfiltrate data (e.g. a crafted URL with secrets
+    # embedded as query params). We flag:
+    # - URLs with secret-shaped query params (api_key=, token=, etc.)
+    #   as HIGH risk — these are exfiltration vectors.
+    # - URLs with very long base64-like query params as MEDIUM risk —
+    #   these are usually either injection or exfiltration attempts.
+    # - All other web_fetch calls as MEDIUM (untrusted content enters
+    #   the conversation).
+    # web_search is always LOW (it only returns metadata + snippets,
+    # not full page content) but still gets a reason so the user can
+    # see the agent reached outside the project.
+    # These rules are ADDITIVE to assess_risk — they don't relax any
+    # existing rule. The structural "untrusted external content"
+    # tagging is enforced at the tool-result layer (see
+    # ToolEngine._web_search / _web_fetch — both wrap their output in
+    # <context_fragment type="web_*"> so the prompt layer can tell
+    # fetched content apart from user commands).
+    elif tool_name == "web_fetch":
+        url = args.get("url", "") or ""
+        suspicious = _check_web_fetch_url(url)
+        if suspicious == "secret":
+            reasons.append(f"web_fetch URL contains secret-shaped param — likely exfiltration vector")
+            level = "high"
+        elif suspicious == "base64":
+            reasons.append("web_fetch URL has long base64-like query param — possible injection/exfiltration")
+            level = "high" if level == "high" else "medium"
+        elif suspicious == "too_long":
+            reasons.append("web_fetch URL is unusually long (>2000 chars) — often malicious")
+            level = "high" if level == "high" else "medium"
+        else:
+            reasons.append("web_fetch — untrusted external content enters conversation")
+            level = "medium"
+    elif tool_name == "web_search":
+        reasons.append("web_search — external content fetched from the internet")
+        # Stays at "low" — snippets are metadata, not full page content.
 
     return RiskAssessment(level=level, reasons=reasons)
 

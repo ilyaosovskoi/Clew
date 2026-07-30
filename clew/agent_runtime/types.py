@@ -120,6 +120,16 @@ class ToolName(Enum):
     GLOB = "glob"
     # v2.0.0: Progressive tool disclosure — search tool catalog
     SEARCH_TOOLS = "search_tools"
+    # v2.1.0: web search/fetch — see G18. Routes through MCPManager
+    # (web_search is a thin wrapper over an MCP search server) or
+    # falls back to a free no-API-key backend. web_fetch is a direct
+    # HTTP GET + HTML-to-text extraction. Available in ALL sections
+    # (general, heavy_code, office) — same visibility rule as
+    # call_mcp_tool. The 'researcher' role whitelist (see
+    # ToolEngine.ROLE_TOOL_WHITELIST) is read-only by construction
+    # and explicitly includes web_search/web_fetch.
+    WEB_SEARCH = "web_search"
+    WEB_FETCH = "web_fetch"
 
 
 class AgentEvent(Enum):

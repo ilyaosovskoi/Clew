@@ -3545,6 +3545,116 @@ class ClewBridge(QObject):
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    # ── v2.1.0 (G16) — Signed audit trail ───────────────────────────
+
+    @Slot(result='QVariantMap')
+    def export_audit_signed_json(self):
+        """Export the current activity log as a signed + hash-chained
+        JSON string (G16). Each entry gets an Ed25519 signature over
+        its canonical payload + the previous entry's hash."""
+        try:
+            from ..activity_log import get_activity_log
+            log = get_activity_log()
+            signed = log.export_signed_json()
+            return {"ok": True, "signed_json": signed}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def verify_audit_signed_file(self, path):
+        """Verify a signed/chained audit export file (G16)."""
+        try:
+            from ..audit_signing import verify_signed_file
+            report = verify_signed_file(path)
+            return {"ok": True, "report": report.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.1.0 (G15) — Multi-provider consensus engine ──────────────
+
+    @Slot(result='QVariantMap')
+    def get_consensus_config(self):
+        """Return the current consensus engine config."""
+        try:
+            from ..consensus_engine import get_consensus_config as _get
+            cfg = _get()
+            return {"ok": True, **cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, float, float, int, result='QVariantMap')
+    def set_consensus_config(self, providers_csv, min_agreement, timeout_s, max_chars):
+        """Patch consensus config. ``providers_csv`` is a comma-separated
+        list of provider ids (empty string = auto)."""
+        try:
+            from ..consensus_engine import (
+                get_consensus_config, set_consensus_config,
+                ConsensusConfig,
+            )
+            current = get_consensus_config()
+            if providers_csv:
+                providers = tuple(p.strip() for p in providers_csv.split(",") if p.strip())
+            else:
+                providers = current.providers
+            new_cfg = ConsensusConfig(
+                providers=providers,
+                min_agreement=float(min_agreement) if min_agreement else current.min_agreement,
+                timeout_s=float(timeout_s) if timeout_s else current.timeout_s,
+                max_chars_per_response=int(max_chars) if max_chars else current.max_chars_per_response,
+            )
+            set_consensus_config(new_cfg)
+            return {"ok": True, **new_cfg.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def run_consensus(self, prompt):
+        """Run a prompt on 2–3 providers in parallel and return a
+        structured comparison. BLOCKING — the GUI should call this
+        from a worker thread."""
+        try:
+            from ..consensus_engine import run_consensus, render_report_text
+            active_pid = ""
+            registry = None
+            try:
+                if self._agent_runtime is not None:
+                    registry = getattr(self._agent_runtime, "registry", None)
+                    if registry is not None:
+                        active_pid = getattr(registry, "active_id", "") or ""
+            except Exception:
+                pass
+            report = run_consensus(
+                prompt=prompt,
+                registry=registry,
+                active_provider_id=active_pid,
+            )
+            return {"ok": True, "text": render_report_text(report), "report": report.to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.1.0 (G17) — Automatic learning loop ──────────────────────
+
+    @Slot(str, str, result='QVariantMap')
+    def handle_learnings_command(self, workspace, arg):
+        """Handle the /learnings slash command (G17). Delegates to
+        clew.learning_loop.handle_learnings_command."""
+        try:
+            from ..learning_loop import handle_learnings_command as _handle
+            return _handle(workspace or "", arg or "")
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── v2.1.0 (G18) — Web search backend status ────────────────────
+
+    @Slot(result='QVariantMap')
+    def get_websearch_status(self):
+        """Return web search backend health + last probe results (G18)."""
+        try:
+            from ..web_search_backend import get_websearch_status as _get
+            return {"ok": True, "status": _get()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     @Slot(str, str, result='QVariantMap')
     def spawn_subidentity(self, role, name):
         try:
@@ -4089,6 +4199,94 @@ class ClewBridge(QObject):
             return {"ok": False, "error": str(e)}
 
 
+
+    # ── G18: Notifier ───────────────────────────────────────────────
+
+    # @Slot(str, result='QVariantMap')
+    def notify_configure_backend(self, name, config_json):
+        """Configure or update a notification backend. config_json is a JSON string."""
+        try:
+            from ..notifier import get_notifier
+            config = json.loads(config_json) if isinstance(config_json, str) else config_json
+            return get_notifier().configure_backend(name, config)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # @Slot(str, bool, result='QVariantMap')
+    def notify_set_enabled(self, name, enabled):
+        """Enable or disable a notification backend."""
+        try:
+            from ..notifier import get_notifier
+            return get_notifier().set_backend_enabled(name, bool(enabled))
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # @Slot(str, result='QVariantMap')
+    def notify_test(self, name):
+        """Send a test notification to a specific backend."""
+        try:
+            from ..notifier import get_notifier
+            return get_notifier().test_backend(name)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # @Slot(result='QVariantMap')
+    def notify_test_all(self):
+        """Send test notifications to all configured backends."""
+        try:
+            from ..notifier import get_notifier
+            return get_notifier().test_all()
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # @Slot(result='QVariantList')
+    def notify_list_backends(self):
+        """Return metadata for all configured notification backends."""
+        try:
+            from ..notifier import get_notifier
+            return get_notifier().list_backends()
+        except Exception:
+            return []
+
+    # @Slot(str, str, result='QVariantMap')
+    def notify_set_events(self, name, events_str):
+        """Set which event kinds trigger notifications. events_str is comma-separated."""
+        try:
+            from ..notifier import get_notifier
+            events = [e.strip() for e in events_str.split(",")] if events_str else []
+            return get_notifier().set_events(name, events)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # @Slot(result='QVariantMap')
+    def notify_status(self):
+        """Return overall notifier status."""
+        try:
+            from ..notifier import get_notifier
+            return {"ok": True, **get_notifier().status()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # @Slot(str, result='QVariantMap')
+    def notify_remove_backend(self, name):
+        """Remove a notification backend configuration."""
+        try:
+            from ..notifier import get_notifier
+            return get_notifier().remove_backend(name)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── G18: Daemon ─────────────────────────────────────────────────
+
+    # @Slot(result='QVariantMap')
+    def daemon_status(self):
+        """Return daemon status information."""
+        try:
+            from ..daemon import load_daemon_config
+            config = load_daemon_config()
+            return {"ok": True, "configured": bool(config.get("auth_token"))}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     # ── Cleanup ───────────────────────────────────────────────────
 

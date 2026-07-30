@@ -195,6 +195,19 @@ class ToolEngine:
             "call_mcp_tool", "spawn_subagent", "watchdog_check",
             "self_verify", "undo_write",
         },
+        # v2.1.0 (G18): read-only research role. Has web_search/web_fetch
+        # but NO write/execute/git-write/mcp-call tools — so even if a
+        # prompt-injected instruction from fetched content tries to get
+        # the sub-agent to write files or run shell commands, the
+        # dispatch-level whitelist rejects it regardless of what the
+        # model attempts. Same defence-in-depth principle already used
+        # for explore/plan.
+        "researcher": {
+            "web_search", "web_fetch",
+            "read_file", "read_binary_file",
+            "search_project", "grep", "glob", "list_files",
+            "get_project_structure", "file_info", "get_skill",
+        },
     }
 
     def set_role_whitelist(self, role: str, tools: Optional[List[str]] = None) -> None:
@@ -774,6 +787,23 @@ class ToolEngine:
             ),
             # v2.0.0: Progressive tool disclosure — search tool catalog
             ToolName.SEARCH_TOOLS: lambda: self._search_tools_handler(args),
+            # v2.1.0 (G18): web search/fetch. Available in ALL sections
+            # (general, heavy_code, office) — same visibility rule as
+            # call_mcp_tool. web_search routes through MCPManager with
+            # ordered fallback; web_fetch is a direct HTTP GET + HTML-
+            # to-text extraction. Both wrap their output as
+            # <context_fragment type="web_*"> so the result participates
+            # in tombstone-compaction AND is tagged as untrusted
+            # external content (Guardian + downstream consumers can
+            # distinguish injected instructions from user commands).
+            ToolName.WEB_SEARCH: lambda: self._web_search(
+                args.get("query", ""),
+                num_results=int(args.get("num_results", 5) or 5),
+            ),
+            ToolName.WEB_FETCH: lambda: self._web_fetch(
+                args.get("url", ""),
+                max_chars=int(args.get("max_chars", 8000) or 8000),
+            ),
         }
 
         if name not in dispatch_map:
@@ -2774,5 +2804,201 @@ class ToolEngine:
             return "\n".join(lines)
         except Exception as e:
             return f"[STRUCTURE ERROR] {e}"
+
+    # ── v2.1.0 (G18): Web search / fetch ─────────────────────────────
+    # ``_web_search`` is a thin wrapper that routes through MCPManager
+    # (so it reuses MCPManager's process lifecycle, config loading from
+    # ~/.clew/mcp.json, and catalog logic instead of a new HTTP client).
+    # It uses an ordered-fallback pattern: if the primary MCP search
+    # server is unavailable, it falls back to the next configured
+    # backend; whichever backend actually served the request is
+    # recorded in the result so the user/agent can see which one won.
+    #
+    # ``_web_fetch`` is implemented directly with stdlib urllib (no new
+    # dependency — requests is already in requirements.txt but we
+    # prefer urllib for the no-deps path) + a minimal HTML-to-text
+    # extractor. It still goes through URL validation and output-size
+    # discipline (max_chars) so a 5MB HTML page doesn't blow the
+    # agent's context window.
+    #
+    # Both tools wrap their output through ``build_fragment()`` from
+    # ``agent/context_fragments.py`` using a new fragment type
+    # (``web_search`` / ``web_page``), so large fetched pages
+    # tombstone-compact the same way old file reads already do, AND
+    # so the result is structurally tagged as untrusted external
+    # content (instructions appearing inside fetched web content are
+    # data, not commands from the user — see Guardian's web-fetch
+    # risk rule in ``agent/guardian.py``).
+
+    def _web_search(self, query: str, num_results: int = 5) -> str:
+        """Search the web via the configured MCP search backend.
+
+        Routes through ``MCPManager`` so it reuses the existing
+        process lifecycle + ``~/.clew/mcp.json`` config. If the
+        primary search backend is unavailable, falls back to the next
+        configured backend (ordered-fallback pattern). Whichever
+        backend actually served the request is recorded in the
+        result string so the agent + audit trail can see it.
+
+        Args:
+            query: the search query string. Required — empty query
+                returns an error (avoid accidental "search for
+                nothing" footguns, same rule as _grep).
+            num_results: how many results to ask the backend for.
+                Default 5; capped at 20 to keep the result bounded.
+
+        Returns:
+            A string starting with ``[WEB_SEARCH ...]`` containing
+            the results, wrapped in a ``<context_fragment>`` so the
+            output participates in tombstone-compaction and is tagged
+            as untrusted external content. On any error, returns
+            ``[WEB_SEARCH ERROR] ...`` instead (never raises).
+        """
+        if not query or not query.strip():
+            return "[WEB_SEARCH ERROR] query is required"
+        num_results = max(1, min(int(num_results or 5), 20))
+        try:
+            from clew.web_search_backend import (
+                run_web_search, get_websearch_status,
+            )
+            results, served_by = run_web_search(
+                query=query.strip(),
+                num_results=num_results,
+            )
+            if not results:
+                return (
+                    f"[WEB_SEARCH NO RESULTS] query={query!r} "
+                    f"(backend={served_by or 'none'}). Configure a "
+                    f"search MCP server in ~/.clew/mcp.json or via "
+                    f"the /websearch command."
+                )
+            # Format results as a compact list.
+            lines = [
+                f"[WEB_SEARCH] {len(results)} result(s) for {query!r} "
+                f"(served_by={served_by or 'unknown'})",
+                "",
+            ]
+            for i, r in enumerate(results, 1):
+                title = (r.get("title") or "").strip()[:120]
+                url = (r.get("url") or "").strip()[:300]
+                snippet = (r.get("snippet") or "").strip()[:300]
+                lines.append(f"{i}. {title}")
+                lines.append(f"   URL: {url}")
+                if snippet:
+                    lines.append(f"   {snippet}")
+                lines.append("")
+            body = "\n".join(lines)
+            # Wrap in a context fragment so it tombstone-compacts and
+            # is tagged as untrusted external content.
+            from clew.agent.context_fragments import build_fragment, stable_id
+            fid = stable_id("web_search", query.strip())
+            fragment = build_fragment("web_search", fid, body)
+            return fragment
+        except Exception as e:
+            logger.warning("[web_search] failed: %s", e)
+            return f"[WEB_SEARCH ERROR] {e}"
+
+    def _web_fetch(self, url: str, max_chars: int = 8000) -> str:
+        """Fetch a URL and return its content as plain text.
+
+        Direct HTTP GET with stdlib urllib (no new dependency) +
+        minimal HTML-to-text extraction. The result is truncated to
+        ``max_chars`` and wrapped in a ``<context_fragment>`` so it
+        participates in tombstone-compaction AND is tagged as
+        untrusted external content (instructions appearing inside
+        fetched web content are data, not commands from the user).
+
+        URL validation rejects:
+        - non-http(s) schemes (file://, ftp://, etc. — prevents the
+          agent from reading local files via a URL bypass).
+        - obviously-malicious URLs (long base64-like query params,
+          secret-shaped strings) — these are flagged by Guardian as
+          at-least-medium risk; here we just refuse to fetch them.
+
+        Args:
+            url: the URL to fetch. Required.
+            max_chars: cap on the returned text length. Default 8000.
+
+        Returns:
+            A string starting with ``[WEB_FETCH ...]`` containing the
+            extracted text, wrapped in a ``<context_fragment>``. On
+            any error, returns ``[WEB_FETCH ERROR] ...`` instead.
+        """
+        if not url or not url.strip():
+            return "[WEB_FETCH ERROR] url is required"
+        url = url.strip()
+        max_chars = max(100, min(int(max_chars or 8000), 50000))
+        # Validate scheme — only http/https allowed (no file://, ftp://).
+        if not (url.startswith("http://") or url.startswith("https://")):
+            return (
+                f"[WEB_FETCH ERROR] only http(s) URLs are allowed "
+                f"(got {url[:80]!r})"
+            )
+        # Heuristic: reject URLs with very long base64-like query
+        # params — these are often exfiltration attempts (secret
+        # embedded as a query param) or prompt-injection vectors.
+        # Guardian also flags these, but we double-check here so the
+        # fetch never happens even if Guardian is disabled.
+        suspicious_reason = _check_suspicious_url(url)
+        if suspicious_reason:
+            return (
+                f"[WEB_FETCH REJECTED] URL looks suspicious: "
+                f"{suspicious_reason}. If this is a false positive, "
+                f"the user can fetch the URL manually and paste the "
+                f"content into the chat."
+            )
+        try:
+            from clew.web_search_backend import fetch_url_as_text
+            text, status, final_url = fetch_url_as_text(url, max_chars=max_chars)
+            if not text:
+                return (
+                    f"[WEB_FETCH EMPTY] {url} returned no text content "
+                    f"(HTTP {status})"
+                )
+            body = (
+                f"url: {final_url}\n"
+                f"http_status: {status}\n"
+                f"chars: {len(text)}\n"
+                f"\n--- content ---\n{text}"
+            )
+            from clew.agent.context_fragments import build_fragment, stable_id
+            fid = stable_id("web_page", url)
+            fragment = build_fragment("web_page", fid, body)
+            return f"[WEB_FETCH] {final_url} (HTTP {status}, {len(text)} chars)\n{fragment}"
+        except Exception as e:
+            logger.warning("[web_fetch] failed for %s: %s", url, e)
+            return f"[WEB_FETCH ERROR] {url}: {e}"
+
+
+def _check_suspicious_url(url: str) -> Optional[str]:
+    """Return a reason string if the URL looks suspicious, else None.
+
+    Heuristic checks:
+    - Query params with long base64-like values (>=80 chars of
+      [A-Za-z0-9+/=]) — often exfiltration or injection vectors.
+    - URL containing obvious secret-shaped strings (api_key=,
+      token=, password=, secret= followed by a long value).
+    - Extremely long URL (>2000 chars) — almost always malicious.
+    """
+    if len(url) > 2000:
+        return "URL is unusually long (>2000 chars)"
+    # Look at the query string.
+    if "?" in url:
+        query = url.split("?", 1)[1]
+        for param in query.split("&"):
+            if "=" not in param:
+                continue
+            key, _, value = param.partition("=")
+            key_lower = key.lower()
+            # Secret-shaped keys.
+            if key_lower in ("api_key", "apikey", "token", "access_token",
+                              "password", "passwd", "secret", "client_secret"):
+                if len(value) >= 16:
+                    return f"URL contains secret-shaped param {key!r}"
+            # Long base64-like values.
+            if len(value) >= 80 and re.fullmatch(r"[A-Za-z0-9+/=_\-]+", value):
+                return f"URL param {key!r} has a long base64-like value (>=80 chars)"
+    return None
+
 
 

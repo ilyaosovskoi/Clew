@@ -79,6 +79,9 @@ CATEGORY_PLAN = "plan"
 CATEGORY_ERROR = "error"
 CATEGORY_INFO = "info"
 CATEGORY_OTHER = "other"
+# v2.1.0 (G18): web tools get their own category so the Activity Stream
+# can show "agent reached outside the project" with a distinct icon.
+CATEGORY_WEB = "web"
 
 ALL_CATEGORIES = (
     CATEGORY_SHELL,
@@ -95,6 +98,7 @@ ALL_CATEGORIES = (
     CATEGORY_ERROR,
     CATEGORY_INFO,
     CATEGORY_OTHER,
+    CATEGORY_WEB,
 )
 
 
@@ -144,6 +148,14 @@ _TOOL_CATEGORY: Dict[str, str] = {
     "spawn_subagent": CATEGORY_SUBAGENT,
     "spawn_multi_agents": CATEGORY_SUBAGENT,
     "self_verify": CATEGORY_VERIFY,
+    # v2.1.0 (G18): web tools — search and fetch get their own category
+    # so the Activity Stream can flag "agent reached outside the project"
+    # with a distinct icon. web_search results + web_fetch pages also
+    # get wrapped as <context_fragment type="web_*"> by the tool engine
+    # so they participate in tombstone-compaction AND are tagged as
+    # untrusted external content (see ToolEngine._web_search/_web_fetch).
+    "web_search": CATEGORY_WEB,
+    "web_fetch": CATEGORY_WEB,
 }
 
 
@@ -181,6 +193,12 @@ _STATUS_PREFIXES: List[tuple] = [
     ("[self_verify ok", STATUS_OK),
     ("[spawned", STATUS_OK),     # [SPAWNED SUBAGENT]
     ("[skill loaded]", STATUS_OK),
+    # v2.1.0 (G18): web tool status prefixes.
+    ("[web_search]", STATUS_OK),
+    ("[web_search no results]", STATUS_OK),
+    ("[web_fetch]", STATUS_OK),
+    ("[web_fetch empty]", STATUS_OK),
+    ("[web_fetch rejected]", STATUS_REJECTED),
 
     ("[error]", STATUS_ERROR),
     ("[security error]", STATUS_ERROR),
@@ -349,6 +367,13 @@ def build_title(tool: str, args: Dict[str, Any]) -> str:
         return f"Spawn {len(tasks)} subagents in parallel"
     if tool == "self_verify":
         return "Self-verify (closing review)"
+    # v2.1.0 (G18): web tool titles.
+    if tool == "web_search":
+        q = args.get("query", "")
+        return f"Web search: {q[:80]}" if q else "Web search"
+    if tool == "web_fetch":
+        u = args.get("url", "")
+        return f"Web fetch: {u[:80]}" if u else "Web fetch"
     # Office tools — uniform prefix
     if tool.startswith("office_"):
         method = tool[len("office_"):]
@@ -644,6 +669,34 @@ class ActivityLog:
         with self._lock:
             entries = list(self._entries)
         return json.dumps(entries, indent=2, default=str)
+
+    # v2.1.0 (G16): signed/chained export. Additive — the existing
+    # export_json() above is unchanged and remains the default for
+    # callers that don't need tamper-evidence. The new method delegates
+    # to clew.audit_signing, which uses a local Ed25519 keypair stored
+    # under ~/.clew/ (same directory convention as everything else) and
+    # hash-chains entries so tampering/reordering/deletion is detectable.
+    # The signed format is fully backward-compatible: each entry in the
+    # output is the original entry dict plus three underscore-prefixed
+    # fields (_signature, _hash, _prev_hash) that existing readers
+    # ignore (they only add fields, never remove or rename).
+    def export_signed_json(self) -> str:
+        """Return the full log as a signed + hash-chained JSON string.
+
+        Each entry gets an Ed25519 signature over its canonical payload
+        + the previous entry's hash. The hash chain makes tampering,
+        reordering, and deletion all detectable. Verify with
+        ``clew.audit_signing.verify_signed_json`` or the
+        ``/audit verify <file>`` slash command.
+
+        Raises ``clew.audit_signing.AuditSigningError`` only if the
+        cryptography backend is unavailable — in that case callers
+        should fall back to ``export_json()``.
+        """
+        from clew.audit_signing import export_signed_json as _export_signed
+        with self._lock:
+            entries = list(self._entries)
+        return _export_signed(entries)
 
     def __len__(self) -> int:
         with self._lock:

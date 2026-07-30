@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 from clew.providers import ProviderRegistry
 from clew.project_context import get_project_context
 from clew.context_manager import get_context_manager
+from clew.skill_loader import load_all_skills_with_builtins
 from .types import AgentEvent, Task, TaskResult, TaskType, ToolCall
 from .context_memory import ContextMemory
 from .tool_engine import ToolEngine
@@ -69,6 +70,8 @@ class AgentRuntime:
         on_token_delta: Optional[Callable[[str], None]] = None,
     ):
         self._registry = registry
+        self.memory = ContextMemory(persist_path=memory_persist_path)
+        self.memory.load()
         self.tools = ToolEngine(workspace)
         # v1.1.3-fix (bug 1.1/1.2): propagate runtime-level context down to
         # the ToolEngine so that _run_subagent_internal (which lives on
@@ -84,8 +87,6 @@ class AgentRuntime:
         self.tools.memory = self.memory
         # Pass provider for Guardian LLM calls
         self.tools._provider = registry.active
-        self.memory = ContextMemory(persist_path=memory_persist_path)
-        self.memory.load()
         self.task_history: List[Task] = []
         self.max_iterations = max_iterations
         self.enable_planning = enable_planning

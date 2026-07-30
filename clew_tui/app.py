@@ -283,6 +283,22 @@ class ClewTUIApp(App):
             self._exec_github(arg)
         elif cmd == "/mcp-server":
             self._exec_mcp_server(arg)
+        elif cmd == "/notify":
+            self._exec_notify(arg)
+        elif cmd == "/daemon":
+            self._exec_daemon(arg)
+        # v2.1.0 (G15): multi-provider consensus engine
+        elif cmd == "/consensus":
+            self._exec_consensus(arg)
+        # v2.1.0 (G16): signed audit trail — /audit verify <file>
+        elif cmd == "/audit-signed":
+            self._exec_audit_signed(arg)
+        # v2.1.0 (G17): automatic learning loop
+        elif cmd == "/learnings":
+            self._exec_learnings(arg)
+        # v2.1.0 (G18): web search backend status
+        elif cmd == "/websearch":
+            self._exec_websearch(arg)
         else:
             self.query_one(ChatLog).add_system(
                 f"Unknown command: {cmd}. Type /help for available commands."
@@ -578,6 +594,10 @@ class ClewTUIApp(App):
             "  [cyan]/handoff[/cyan]   Create / edit / list handoff docs (G6)",
             "  [cyan]/cost[/cyan]      Cost-aware provider routing (M2)",
             "  [cyan]/spend[/cyan]     Team spend dashboard (M3)",
+            "  [cyan]/consensus[/cyan] Run a prompt on 2–3 providers in parallel (G15)",
+            "  [cyan]/audit-signed[/cyan] Verify a signed/chained audit export (G16)",
+            "  [cyan]/learnings[/cyan] List / scan / dismiss auto-learning entries (G17)",
+            "  [cyan]/websearch[/cyan] Web search backend status (G18)",
             "  [cyan]/gui[/cyan]       Launch the Clew GUI window",
             "  [cyan]/help[/cyan]      Show this help",
             "",
@@ -1324,7 +1344,268 @@ class ClewTUIApp(App):
                 )
             lines.append("")
             lines.append("  Use [cyan]/audit json[/cyan] or [cyan]/audit csv[/cyan] to export.")
+            lines.append("  Use [cyan]/audit-signed verify <file>[/cyan] to verify a signed export (G16).")
             chat.add_system("\n".join(lines))
+        self.query_one(InputBox).focus()
+
+    # ── v2.1.0 (G15) — Multi-provider consensus engine ────────────
+
+    def _exec_consensus(self, arg: str) -> None:
+        """Run a prompt on 2–3 providers in parallel and show a structured diff.
+
+        Usage:
+            /consensus <prompt>          — run with default providers
+            /consensus providers p1,p2   — set the provider triplet
+            /consensus min_agreement 0.6 — set the agreement threshold
+            /consensus timeout 30        — per-provider timeout (seconds)
+        """
+        chat = self.query_one(ChatLog)
+        arg = (arg or "").strip()
+        if not arg:
+            chat.add_system(
+                "[b]Consensus Engine (G15)[/b]\n\n"
+                "  Run the same prompt on 2–3 providers in parallel and produce a\n"
+                "  structured diff/comparison between the approaches.\n\n"
+                "  Usage:\n"
+                "    [cyan]/consensus <prompt>[/cyan]          — run with default providers\n"
+                "    [cyan]/consensus providers p1,p2,p3[/cyan] — set the provider triplet\n"
+                "    [cyan]/consensus min_agreement 0.6[/cyan] — set the agreement threshold\n"
+                "    [cyan]/consensus timeout 30[/cyan]        — per-provider timeout (seconds)\n"
+                "    [cyan]/consensus config[/cyan]            — show current config"
+            )
+            self.query_one(InputBox).focus()
+            return
+        parts = arg.split(None, 1)
+        sub = parts[0].lower()
+        sub_arg = parts[1].strip() if len(parts) > 1 else ""
+        if sub == "config":
+            r = self.bridge.get_consensus_config()
+            if r.get("ok"):
+                cfg = r
+                chat.add_system(
+                    f"[b]Consensus config[/b]\n"
+                    f"  providers: {', '.join(cfg.get('providers', [])) or '(auto — picks 3 from different families)'}\n"
+                    f"  min_agreement: {cfg.get('min_agreement', 0.4)}\n"
+                    f"  timeout_s: {cfg.get('timeout_s', 60.0)}\n"
+                    f"  max_chars_per_response: {cfg.get('max_chars_per_response', 8000)}"
+                )
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        if sub == "providers":
+            if not sub_arg:
+                chat.add_system("Usage: /consensus providers p1,p2,p3")
+                self.query_one(InputBox).focus()
+                return
+            pids = [p.strip() for p in sub_arg.split(",") if p.strip()]
+            r = self.bridge.set_consensus_config(providers=tuple(pids))
+            if r.get("ok"):
+                chat.add_system(f"Consensus providers set to: {', '.join(pids)}")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        if sub == "min_agreement":
+            try:
+                val = float(sub_arg)
+            except ValueError:
+                chat.add_system("Usage: /consensus min_agreement 0.6")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.set_consensus_config(min_agreement=val)
+            if r.get("ok"):
+                chat.add_system(f"Consensus min_agreement set to: {val}")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        if sub == "timeout":
+            try:
+                val = float(sub_arg)
+            except ValueError:
+                chat.add_system("Usage: /consensus timeout 30")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.set_consensus_config(timeout_s=val)
+            if r.get("ok"):
+                chat.add_system(f"Consensus timeout set to: {val}s")
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        # Otherwise: treat the whole arg as a prompt to run consensus on.
+        # Run in a worker so we don't block the UI.
+        prompt = arg
+        chat.add_user(f"[consensus] {prompt}")
+        self._turn_running = True
+        self._refresh_status("thinking")
+        self._run_consensus(prompt)
+
+    @work(thread=True, exclusive=True)
+    def _run_consensus(self, prompt: str) -> None:
+        try:
+            result = self.bridge.run_consensus(prompt)
+            self.call_from_thread(self._on_consensus_done, result)
+        except Exception as e:
+            self.call_from_thread(self._on_turn_error, str(e))
+
+    def _on_consensus_done(self, result: Dict[str, Any]) -> None:
+        chat = self.query_one(ChatLog)
+        self._turn_running = False
+        self._refresh_status("idle")
+        if not result.get("ok"):
+            chat.add_error(f"Consensus failed: {result.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        text = result.get("text", "")
+        if text:
+            chat.add_final(text)
+        self.query_one(InputBox).focus()
+
+    # ── v2.1.0 (G16) — Signed audit trail verification ────────────
+
+    def _exec_audit_signed(self, arg: str) -> None:
+        """Verify a signed/chained audit export (G16).
+
+        Usage:
+            /audit-signed                  — show help
+            /audit-signed export           — export the current log as signed JSON
+            /audit-signed verify <file>    — verify a signed export file
+        """
+        chat = self.query_one(ChatLog)
+        arg = (arg or "").strip()
+        if not arg:
+            chat.add_system(
+                "[b]Signed Audit Trail (G16)[/b]\n\n"
+                "  Ed25519 signatures + SHA-256 hash chaining for tamper-evidence.\n\n"
+                "  Usage:\n"
+                "    [cyan]/audit-signed export[/cyan]           — export current log as signed JSON\n"
+                "    [cyan]/audit-signed verify <file>[/cyan]    — verify a signed export file\n\n"
+                "  The keypair is stored at [dim]~/.clew/audit_key[/dim] (private) and\n"
+                "  [dim]~/.clew/audit_key.pub[/dim] (public). Generated on first use.\n"
+                "  Zero-cloud — keys never leave the user's machine."
+            )
+            self.query_one(InputBox).focus()
+            return
+        parts = arg.split(None, 1)
+        sub = parts[0].lower()
+        sub_arg = parts[1].strip() if len(parts) > 1 else ""
+        if sub == "export":
+            r = self.bridge.export_audit_signed_json()
+            if r.get("ok"):
+                signed = r.get("signed_json", "")
+                # Show a truncated preview + offer to save to file.
+                preview = signed[:4000] + (f"\n... [{len(signed)} total chars]" if len(signed) > 4000 else "")
+                chat.add_system(
+                    f"[b]Signed audit export[/b] ({len(signed)} chars)\n"
+                    f"```json\n{preview}\n```\n\n"
+                    f"To verify later: [cyan]/audit-signed verify <file>[/cyan]"
+                )
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        if sub == "verify":
+            if not sub_arg:
+                chat.add_system("Usage: /audit-signed verify <path-to-signed-json>")
+                self.query_one(InputBox).focus()
+                return
+            r = self.bridge.verify_audit_signed_file(sub_arg)
+            if not r.get("ok"):
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+                self.query_one(InputBox).focus()
+                return
+            report = r.get("report", {})
+            ok = report.get("ok")
+            checked = report.get("entries_checked", 0)
+            valid = report.get("signatures_valid", 0)
+            invalid = report.get("signatures_invalid", 0)
+            breaks = report.get("chain_breaks", 0)
+            failure = report.get("first_failure", "")
+            status_line = "[green]OK[/green]" if ok else "[red]FAILED[/red]"
+            chat.add_system(
+                f"[b]Audit verification[/b]  {status_line}\n"
+                f"  entries checked:   {checked}\n"
+                f"  signatures valid:  {valid}\n"
+                f"  signatures invalid: {invalid}\n"
+                f"  chain breaks:      {breaks}"
+                + (f"\n  [red]first failure:[/red] {failure}" if failure else "")
+            )
+            self.query_one(InputBox).focus()
+            return
+        chat.add_system(f"Unknown /audit-signed subcommand: {sub}")
+        self.query_one(InputBox).focus()
+
+    # ── v2.1.0 (G17) — Automatic learning loop ────────────────────
+
+    def _exec_learnings(self, arg: str) -> None:
+        """List / scan / dismiss auto-learning entries (G17).
+
+        Usage:
+            /learnings                  — list recent entries
+            /learnings show <id>        — show full body
+            /learnings dismiss <id>     — stop injecting an entry
+            /learnings restore <id>     — un-dismiss
+            /learnings scan             — manually run trigger detection
+            /learnings dismissed        — list dismissed only
+        """
+        chat = self.query_one(ChatLog)
+        workspace = self.bridge.workspace or os.getcwd()
+        r = self.bridge.handle_learnings_command(workspace, arg or "")
+        if r.get("ok"):
+            chat.add_system(r.get("text", ""))
+        else:
+            chat.add_system(f"[red]Error:[/red] {r.get('error', 'unknown')}")
+        self.query_one(InputBox).focus()
+
+    # ── v2.1.0 (G18) — Web search backend status ──────────────────
+
+    def _exec_websearch(self, arg: str) -> None:
+        """Show web search backend status (G18).
+
+        Usage:
+            /websearch            — show backend health + last probe
+            /websearch backends   — alias for /websearch
+            /websearch scan       — re-discover search backends now
+        """
+        chat = self.query_one(ChatLog)
+        r = self.bridge.get_websearch_status()
+        if not r.get("ok"):
+            chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        status = r.get("status", {})
+        active = status.get("active_backend", "")
+        msg = status.get("last_status_msg", "")
+        backends = status.get("backends", {})
+        mcp_servers = status.get("mcp_servers", [])
+        lines = ["[b]Web Search Backend Status (G18)[/b]", ""]
+        lines.append(f"  Active backend: [cyan]{active or '(none)'}[/cyan]")
+        if msg:
+            lines.append(f"  Last status:    {msg}")
+        if backends:
+            lines.append("")
+            lines.append("  [b]Backend health[/b]")
+            for name, h in backends.items():
+                ok = h.get("last_probe_ok", False)
+                mark = "[green]ok[/green]" if ok else "[red]fail[/red]"
+                err = h.get("last_probe_error", "")
+                lines.append(f"    {name}: {mark}" + (f" ({err[:80]})" if err else ""))
+        else:
+            lines.append("  No backend probes yet — run a web_search to populate.")
+        if mcp_servers:
+            lines.append("")
+            lines.append(f"  [b]MCP servers[/b] ({len(mcp_servers)} configured)")
+            for s in mcp_servers[:10]:
+                running = s.get("running", False)
+                rmark = "[green]running[/green]" if running else "[red]stopped[/red]"
+                lines.append(f"    {s.get('name', '?')}: {rmark} ({s.get('tool_count', 0)} tools)")
+        else:
+            lines.append("")
+            lines.append("  [dim]No MCP servers configured. See .clew/skills/web-research/SKILL.md[/dim]")
+            lines.append("  [dim]for a no-API-key search backend template.[/dim]")
+        chat.add_system("\n".join(lines))
         self.query_one(InputBox).focus()
 
     # ── v2.0.2 (G6) — Post-task handoff ───────────────────────────
@@ -2509,6 +2790,205 @@ class ClewTUIApp(App):
                     f"  Available tools: {tools}",
                     "",
                     "  Use [cyan]/mcp-server start[/cyan] for launch instructions.",
+                ]
+                chat.add_system("\n".join(lines))
+            else:
+                chat.add_error(f"Error: {r.get('error', 'unknown')}")
+
+        self.query_one(InputBox).focus()
+
+    # ── G18: /notify ────────────────────────────────────────────────
+
+    def _exec_notify(self, arg: str) -> None:
+        """Manage notification backends.
+
+        Usage:
+            /notify                        — show status
+            /notify test <backend>         — send test notification
+            /notify test-all               — test all backends
+            /notify enable <backend>       — enable a backend
+            /notify disable <backend>      — disable a backend
+            /notify events <backend> <evts> — set events (comma-separated)
+            /notify remove <backend>       — remove a backend
+            /notify telegram <token> <chat_id> — configure Telegram
+            /notify discord <webhook_url>  — configure Discord
+            /notify slack <webhook_url>    — configure Slack
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+
+        if not arg:
+            r = self.bridge.notify_status()
+            if r.get("ok"):
+                backends = r.get("backends", [])
+                lines = ["[b]Notification Backends[/b]  (~/.clew/notifiers.json)", ""]
+                if not backends:
+                    lines.append("  No backends configured.")
+                    lines.append("")
+                    lines.append("  Configure with:")
+                    lines.append("    [cyan]/notify telegram <bot_token> <chat_id>[/cyan]")
+                    lines.append("    [cyan]/notify discord <webhook_url>[/cyan]")
+                    lines.append("    [cyan]/notify slack <webhook_url>[/cyan]")
+                else:
+                    for b in backends:
+                        status = "[green]ON[/green]" if b["enabled"] else "[red]OFF[/red]"
+                        events = ", ".join(b.get("events", []))
+                        lines.append(f"  {b['name']}  {status}  events: {events}")
+                lines.append("")
+                lines.append("  Use [cyan]/notify test <backend>[/cyan] to test.")
+                chat.add_system("\n".join(lines))
+            else:
+                chat.add_error(f"Error: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+
+        parts = arg.split(None, 1)
+        sub = parts[0].lower()
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "test-all":
+            r = self.bridge.notify_test_all()
+            if r.get("ok"):
+                results = r.get("results", {})
+                lines = ["[b]Test Results[/b]", ""]
+                for name, res in results.items():
+                    status = "[green]OK[/green]" if res.get("ok") else f"[red]FAIL[/red] {res.get('error', '')}"
+                    lines.append(f"  {name}: {status}")
+                chat.add_system("\n".join(lines))
+            else:
+                chat.add_error(f"Error: {r.get('error', 'unknown')}")
+        elif sub == "test":
+            if not rest:
+                chat.add_system("Usage: /notify test <backend_name>")
+            else:
+                r = self.bridge.notify_test(rest)
+                if r.get("ok"):
+                    chat.add_system(f"[green]Test notification sent to {rest}.[/green]")
+                else:
+                    chat.add_error(f"Test failed: {r.get('error', 'unknown')}")
+        elif sub == "enable":
+            if not rest:
+                chat.add_system("Usage: /notify enable <backend_name>")
+            else:
+                r = self.bridge.notify_set_enabled(rest, True)
+                if r.get("ok"):
+                    chat.add_system(f"Backend [cyan]{rest}[/cyan] [green]enabled[/green].")
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "disable":
+            if not rest:
+                chat.add_system("Usage: /notify disable <backend_name>")
+            else:
+                r = self.bridge.notify_set_enabled(rest, False)
+                if r.get("ok"):
+                    chat.add_system(f"Backend [cyan]{rest}[/cyan] [red]disabled[/red].")
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "remove":
+            if not rest:
+                chat.add_system("Usage: /notify remove <backend_name>")
+            else:
+                r = self.bridge.notify_remove_backend(rest)
+                if r.get("ok"):
+                    chat.add_system(f"Backend [cyan]{rest}[/cyan] removed.")
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "events":
+            ev_parts = rest.split(None, 1)
+            if len(ev_parts) < 2:
+                chat.add_system("Usage: /notify events <backend> done,error,checkpoint")
+            else:
+                events = [e.strip() for e in ev_parts[1].split(",")]
+                r = self.bridge.notify_set_events(ev_parts[0], events)
+                if r.get("ok"):
+                    chat.add_system(f"Events for [cyan]{ev_parts[0]}[/cyan] set to: {', '.join(events)}")
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "telegram":
+            tg_parts = rest.split()
+            if len(tg_parts) < 2:
+                chat.add_system("Usage: /notify telegram <bot_token> <chat_id>")
+            else:
+                config = {
+                    "enabled": True,
+                    "bot_token": tg_parts[0],
+                    "chat_id": tg_parts[1],
+                    "events": ["done", "error"],
+                }
+                r = self.bridge.notify_configure_backend("telegram", config)
+                if r.get("ok"):
+                    chat.add_system(f"[green]Telegram configured.[/green] Use [cyan]/notify test telegram[/cyan] to verify.")
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "discord":
+            if not rest:
+                chat.add_system("Usage: /notify discord <webhook_url>")
+            else:
+                config = {
+                    "enabled": True,
+                    "webhook_url": rest,
+                    "events": ["done", "error"],
+                }
+                r = self.bridge.notify_configure_backend("discord", config)
+                if r.get("ok"):
+                    chat.add_system(f"[green]Discord configured.[/green] Use [cyan]/notify test discord[/cyan] to verify.")
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        elif sub == "slack":
+            if not rest:
+                chat.add_system("Usage: /notify slack <webhook_url>")
+            else:
+                config = {
+                    "enabled": True,
+                    "webhook_url": rest,
+                    "events": ["done", "error"],
+                }
+                r = self.bridge.notify_configure_backend("slack", config)
+                if r.get("ok"):
+                    chat.add_system(f"[green]Slack configured.[/green] Use [cyan]/notify test slack[/cyan] to verify.")
+                else:
+                    chat.add_error(f"Failed: {r.get('error')}")
+        else:
+            chat.add_system(f"Unknown subcommand: {sub}. Use test|enable|disable|remove|events|telegram|discord|slack.")
+
+        self.query_one(InputBox).focus()
+
+    # ── G18: /daemon ────────────────────────────────────────────────
+
+    def _exec_daemon(self, arg: str) -> None:
+        """Daemon status and information.
+
+        Usage:
+            /daemon          — show daemon status
+            /daemon start    — show how to start the daemon
+        """
+        chat = self.query_one(ChatLog)
+        arg = arg.strip()
+
+        if arg == "start":
+            chat.add_system(
+                "[b]Clew Daemon[/b]\n\n"
+                "  Start the daemon server with:\n"
+                "    [cyan]clew-daemon --port 8765 --notify telegram[/cyan]\n\n"
+                "  Run a single task with notification:\n"
+                "    [cyan]clew-daemon task \"Refactor auth\" --notify telegram[/cyan]\n\n"
+                "  Submit tasks via API:\n"
+                "    [cyan]curl -X POST http://localhost:8765/task \\\\[/cyan]\n"
+                "    [cyan]  -H \"Authorization: Bearer <token>\" \\\\[/cyan]\n"
+                "    [cyan]  -d '{\"prompt\": \"Fix bug #42\"}'[/cyan]\n\n"
+                "  Stream task output:\n"
+                "    [cyan]curl -N http://localhost:8765/stream/<task_id>[/cyan]\n\n"
+                "  Config stored in [cyan]~/.clew/daemon.json[/cyan]"
+            )
+        else:
+            r = self.bridge.daemon_status()
+            if r.get("ok"):
+                lines = [
+                    "[b]Clew Daemon[/b]",
+                    "",
+                    f"  Configured: {'[green]yes[/green]' if r.get('configured') else '[red]no[/red]'}",
+                    "",
+                    "  Use [cyan]/daemon start[/cyan] for launch instructions.",
                 ]
                 chat.add_system("\n".join(lines))
             else:

@@ -14,6 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run CLI**: `clew-cli`
 - **Run ACP server**: `clew-acp`
 - **Run MCP server**: `clew-acp --mcp-server` (or `python -m clew.mcp_server`)
+- **Run daemon**: `clew-daemon serve` (HTTP API + SSE on port 8765) / `clew-daemon task "prompt" --notify telegram`
 - **Run tests**: `pytest clew/` (or `pytest clew/agent/test_v2.py` for v2-specific)
 - **Lint**: `black clew/ clew_tui/` + `mypy clew/ clew_tui/`
 
@@ -195,54 +196,39 @@ Exposes Clew's tools via MCP protocol so other agents can call Clew as a tool pr
 ### Still Missing (not yet implemented)
 | Priority | Gap | Description | Notes |
 |----------|-----|-------------|-------|
-| **G12** | **Cloud/background execution** | Offload tasks to containers, close laptop | Agent always runs locally in real-time |
 | **G8** | **Polished TUI/GUI, fast bug fixes** | "Long-lived UI bugs = disrespect" | Ongoing maintenance task |
+
+### Completed (was G12)
+| Priority | Goal | Description | Status |
+|----------|------|-------------|--------|
+| **G12** | **Cloud/background execution (daemon + messengers)** ✅ | Offload tasks to remote server, run headless, get notifications | **IMPLEMENTED** — `clew/daemon.py` (286 lines) + `clew/notifier.py` (488 lines) + `clew/cli.py` (headless CLI). Daemon provides: HTTP API (REST + SSE) with endpoints POST/GET /task, GET /stream/:id, GET /tasks, health check; TaskQueue with configurable workers; AgentRuntime headless execution; Bearer token auth; Telegram/Discord/Slack notifications via webhook/Bot API; CLI: `clew-daemon serve`, `clew-daemon task "prompt"`, `clew-daemon task-file file.txt`. |
 
 ### Unique Strengths to Leverage (Clew-Only Differentiators)
 | Strength | Current Status | Monetization Angle |
 |----------|----------------|-------------------|
-| **Multi-provider consensus** | Second Opinion (M1) does 1:1 cross-model review | Extend to 2–3 parallel providers + diff comparison for architectural decisions |
-| **Cryptographic offline audit trail** | Activity log + ChaCha20 key storage exist | Signed diffs with timestamps → tamper-proof journal for regulated industries |
-| **Automatic learning loop** | `Loop_Engineering_Guide.md` + `learnings/` infrastructure exists | Auto-detect rollbacks/failed CI → inject learnings into prompts per repo |
+| **Multi-provider consensus** | Second Opinion (M1) does 1:1 cross-model review; G15 extends to 2–3 parallel providers + structured diff | Extend to 2–3 parallel providers + diff comparison for architectural decisions |
+| **Cryptographic offline audit trail** | G16 ships signed Ed25519 + hash-chained audit log (zero-cloud) | Signed diffs with timestamps → tamper-proof journal for regulated industries |
+| **Automatic learning loop** | G17 auto-detects rollbacks/CI failures → injects learnings per repo | `Loop_Engineering_Guide.md` + `learnings/` + existing compaction/fragment infra |
+| **Web search & internet reach** | G18 ships `web_search` / `web_fetch` tools + read-only `researcher` subagent role + untrusted-content fragment wrapping | Closes the single biggest capability gap vs. Claude Code / Cursor / Windsurf |
 
-### New Feature Ideas
-| ID | Feature | Description | Leverages |
-|----|---------|-------------|-----------|
-| **G15** | **Multi-provider consensus engine** | Run same task on 2–3 providers in parallel, show diff between approaches, explain divergence | M1 + 16 providers + AutoRouter |
-| **G16** | **Signed offline audit trail** | Each agent diff/decision signed with local key + timestamp → tamper-proof journal, zero cloud | `activity_log.py` + ChaCha20 storage + zero-telemetry architecture |
-| **G17** | **Automatic learning loop** | Detect rollbacks/CI failures → auto-create `learnings/` entries → inject into future prompts per repo | `Loop_Engineering_Guide.md` + `learnings/` + existing compaction/fragment infra |
+## v2.1.0 (2026-07-30) — G15, G16, G17, G18 ✅ COMPLETED
 
-### Updated Upcoming Goals (Priority-Ordered)
+### G15 — Multi-provider consensus engine
+**Files:** `clew/consensus_engine.py` (480+ lines), `clew_tui/bridge.py` (3 methods), `clew_tui/app.py` (`/consensus` slash command with 5 subcommands: `<prompt>`|`providers`|`min_agreement`|`timeout`|`config`), `clew/web_bridge/bridge.py` (3 GUI slots). Runs the same prompt on 2–3 providers in parallel (ThreadPoolExecutor), extracts structured features per response (files touched, code_blocks, code_chars, text_chars), computes a Jaccard-based agreement score across succeeded responses, and produces a structured divergence list (files_touched / code_volume / explanation_length / file_count) with a likely-reason explanation for each. Configurable: provider triplet, min_agreement threshold (0.0–1.0), per-provider timeout, max_chars_per_response. Persisted via `~/.clew/config.json` under `consensus` key (same convention as M1's `second_opinion`). Fails safe: if a provider errors out, the comparison still returns with the failed provider flagged in the report.
 
-**1. Cloud/Background Execution (G12)**
-- Offload tasks to containers
-- Close laptop, task continues
-- Requires Docker/container infra + task queue
+### G16 — Signed offline audit trail
+**Files:** `clew/audit_signing.py` (340+ lines), `clew/activity_log.py` (added `export_signed_json()` method — additive, `export_json()` unchanged for backward compat), `clew_tui/bridge.py` (2 methods), `clew_tui/app.py` (`/audit-signed` slash command with 2 subcommands: `export`|`verify <file>`), `clew/web_bridge/bridge.py` (2 GUI slots). Ed25519 keypair generated on first use, stored at `~/.clew/audit_key` (chmod 0600) and `~/.clew/audit_key.pub` (chmod 0644). Each entry's signature covers its canonical payload + the previous entry's SHA-256 hash, so tampering / reordering / deletion are all detectable. Verification recomputes the hash chain AND checks every signature, reporting the first broken link. Zero-cloud — keys never leave the user's machine.
 
-**2. Polished TUI/GUI (G8) — ongoing**
-- Fix long-lived UI bugs
-- Improve accessibility and responsiveness
-- Snapshot tests for widgets
+### G17 — Automatic learning loop
+**Files:** `clew/learning_loop.py` (520+ lines), `clew_tui/bridge.py` (1 method), `clew_tui/app.py` (`/learnings` slash command with 6 subcommands: `list`|`show`|`dismiss`|`restore`|`scan`|`dismissed`), `clew/web_bridge/bridge.py` (1 GUI slot). Detects two trigger classes: git rollbacks (`git reset --hard`, force-pushes, `git revert`, abandoned branches with 5+ commits untouched 14+ days) and CI failures (reuses the existing test-command detector pattern from `ToolEngine._detect_project_command` — no new detection scheme). On trigger, auto-creates a `learnings/<date>-<slug>.md` entry following the exact structure already used in `Learnings.md` (template is read at runtime from the project's `Learnings.md` so it never drifts). Learnings are scoped per-repository (under `<project>/learnings/`, with a `~/.clew/learnings/<hash>/` fallback for read-only mounts). Injected into the system prompt via `build_learnings_fragment()` which wraps them in a `<context_fragment type="project_learnings">` so they participate in the same tombstone-compaction as everything else. Dismissed learnings stop being injected (recorded in `.dismissed.json` next to the learnings).
 
-**3. Multi-Provider Consensus Engine (G15)**
-- Parallel execution on 2–3 providers for complex tasks
-- Diff visualization between approaches
-- Configurable consensus threshold
-
-**4. Cryptographic Audit Trail (G16)**
-- Sign each tool call result with local Ed25519 key
-- Hash-chain across session for tamper evidence
-- Export verified audit logs for compliance
-
-**5. Automatic Learning Loop (G17)**
-- Hook into git history (detect `git reset --hard`, reverted commits)
-- Hook into CI results (parse failed test output)
-- Auto-generate `learnings/` entries with context
-- Inject relevant learnings into system prompt per project
+### G18 — Web Search & Internet Reach
+**Files:** `clew/agent_runtime/types.py` (`WEB_SEARCH`, `WEB_FETCH` enum entries), `clew/agent_runtime/tool_engine/_engine.py` (`_web_search` + `_web_fetch` methods, dispatch entries, `researcher` role in `ROLE_TOOL_WHITELIST`, `_check_suspicious_url` helper), `clew/web_search_backend.py` (430+ lines — MCP-first search with ordered fallback + direct HTTP fetch with HTML-to-text extraction), `clew/agent/guardian.py` (web_fetch URL risk classifier + `_check_web_fetch_url` helper — additive, no existing rule weakened), `clew/agent/context_fragments.py` (no changes needed — existing `build_fragment()` works for new types `web_search` / `web_page`), `clew/activity_log.py` (`CATEGORY_WEB` + tool→category mapping + status prefixes + title builders), `clew/skill_loader.py` (no changes needed — existing format supports the new skill), `.clew/skills/web-research/SKILL.md` (project-level skill describing when to search, query formulation, untrusted-content treatment, when to fan out `researcher` subagents), `docs/mcp_search_template.json` (no-API-key DuckDuckGo MCP server template — documented, not force-installed), `clew_tui/bridge.py` (1 method), `clew_tui/app.py` (`/websearch` slash command), `clew/web_bridge/bridge.py` (1 GUI slot), `clew/tests/test_g18_web_search.py` (39 tests). Both tools are available in ALL sections (general, heavy_code, office) — same visibility rule as `call_mcp_tool`. The `researcher` role is read-only by construction (web tools + read-only file tools, NO write/execute/git/mcp-call tools) so prompt-injected instructions from fetched content can't escape at the dispatch level. `web_fetch` rejects non-http(s) URLs and URLs with secret-shaped or long base64-like query params. Both tools wrap output in `<context_fragment type="web_*">` so it tombstone-compacts and is tagged as untrusted external content. Zero-telemetry: the only network traffic is the search/fetch the user explicitly triggered.
 
 ## Website Status (2026-07-27)
 - **index.html** deployed and working on GitHub Pages / main branch
 - Updated with v2.0.1 features: 16 providers, TUI + GUI dual frontend, Guardian safety, Capability catalog, Second Opinion, Token budget, Cross-model verification, Custom providers
+- v2.1.0 features (G15–G18) pending website update — see `CHANGES_update_8.md`
 
 ## Key Bug Fixes
 
@@ -261,3 +247,14 @@ All 144 tests now pass and all imports work correctly.
 
 ## Smoke Test Findings (2026-07-25) — COMPLETED
 TUI starts successfully (status bar, chat area, input box all render). Fixed CSS incompatibility with Textual 8.x: fully rewrote `styles_dark.tcss` and `styles_light.tcss` (removed `--variable`, `@keyframes`, `transition:`, merged duplicate `Screen {}` blocks); fixed `command_palette.py` (`$panel` → `#161b22`). **Best practice**: Full file rewrite instead of patching when CSS contains many incompatible constructs. Textual 8.x: use ONLY literal color values (#rrggbb) or built-in variables ($accent, $text, $text-muted). No `var(--*)`, no `@keyframes`, no `transition: Xs ease`.
+
+## Test Scripts to Validate (2026-07-30) — PENDING
+Test scripts created in `test_scripts/` need to be run after fixing import issues:
+- `test_basic_chat.py` — Basic chat mode with provider
+- `test_agent_mode.py` — Agent mode with file tools  
+- `test_heavy_code.py` — Heavy code mode with refactoring
+- `test_cli_headless.py` — CLI headless execution
+- `test_daemon.py` — Daemon HTTP API + SSE
+- `test_providers.py` — Provider switching & AutoRouter
+
+**Known blocker**: Missing import in `clew/agent_runtime/runtime.py:288` — needs `from clew.skill_loader import load_all_skills_with_builtins`. Fix this first, then run `import clew.skill_loader` line, then run `python -m pytest clew/tests/` + the 6 test scripts.

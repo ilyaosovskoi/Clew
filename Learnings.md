@@ -236,17 +236,63 @@ if TYPE_CHECKING:
 
 ---
 
+### LEARN-20260730-001: MCP-First Beats Hardcoded API for Zero-Config Web Search
+**Date**: 2026-07-30  
+**Tags**: [architecture, mcp, web-search, g18, zero-config]  
+**Source**: G18 (Web Search & Internet Reach)  
+**Severity**: medium  
+**Status**: validated
+
+**Context**: G18 needed a web search backend for Clew. The obvious approach was to hardcode a single search API (Exa, Tavily, Brave, etc.) — but every option required an API key, which broke the zero-config promise that's been Clew's differentiator since v1.0.
+
+**What Happened**: Instead of hardcoding, we routed `web_search` through the existing `MCPManager` (same path `call_mcp_tool` already uses). This means:
+- The user picks the search backend by editing `~/.clew/mcp.json` (one config toggle).
+- A no-API-key backend (DuckDuckGo MCP via `npx ddg-mcp`) ships as a documented template (`docs/mcp_search_template.json`) — copy to `~/.clew/mcp.json` and search works immediately.
+- Paid backends (Exa, Tavily, Brave) work too — just add their MCP server entry with `"role": "search"`.
+- Ordered-fallback: if the primary backend is unavailable, Clew tries the next configured one, recording which backend actually served the request.
+
+**Root Cause**: A hardcoded API would have:
+1. Required every user to sign up for a key — friction at install time.
+2. Locked Clew to one provider's quality / pricing / availability.
+3. Duplicated the process lifecycle, config loading, and catalog logic that `MCPManager` already provides.
+4. Violated the "zero-telemetry, zero-cloud" architecture rule — Clew has no servers of its own to proxy through.
+
+The MCP-first approach reuses 100% of the existing MCP infrastructure (process lifecycle, `~/.clew/mcp.json` config, typed catalog, crash watchdog) and adds only a thin "discover search-capable servers + ordered fallback" layer on top.
+
+**Evidence**:
+- `clew/web_search_backend.py` (430 lines) — pure orchestration, no HTTP client of its own for search.
+- `clew/tests/test_g18_web_search.py::test_web_search_falls_back_when_primary_fails` — verifies the fallback path.
+- `web_fetch` IS implemented directly (urllib + HTML-to-text) because it doesn't need a search index — but still goes through URL validation + Guardian risk rules.
+- Zero new dependencies added to `requirements.txt`.
+
+**Actionable Rule**:
+- **DO**: Route new external capabilities through MCP when an MCP server already does the job — you inherit config, lifecycle, and crash recovery for free.
+- **DO**: Ship a no-API-key default as a documented template, not as a forced install — the user opts in by copying the file.
+- **DO**: Use ordered-fallback so a single backend's outage doesn't break the feature.
+- **DON'T**: Hardcode a paid API as the *only* path — it breaks zero-config and locks you to one vendor.
+- **DON'T**: Reinvent process lifecycle / config loading when MCPManager already does it.
+
+**How to Apply Next Time**:
+1. Before adding a new external capability, check if an MCP server already exists for it.
+2. If yes: route through `MCPManager.call_tool()` — write a thin wrapper that handles arg-shape variation and fallback, nothing more.
+3. If no: implement directly with stdlib (urllib for HTTP), but still wrap output as a `<context_fragment>` so it participates in compaction + is tagged as untrusted external content.
+4. Always ship a no-API-key template in `docs/` so a fresh install can enable the feature with one config toggle.
+
+---
+
 ## Tags Index
 
 | Tag | Count | Latest |
 |-----|-------|--------|
-| architecture | 1 | LEARN-20250725-002 |
+| architecture | 2 | LEARN-20260730-001 |
 | bug | 2 | LEARN-20250726-001 |
 | circular-import | 1 | LEARN-20250726-002 |
 | css | 1 | LEARN-20250725-001 |
 | debugging | 1 | LEARN-20250725-001 |
 | frontend | 1 | LEARN-20250725-001 |
+| g18 | 1 | LEARN-20260730-001 |
 | import | 1 | LEARN-20250726-001 |
+| mcp | 1 | LEARN-20260730-001 |
 | packaging | 1 | LEARN-20250725-002 |
 | performance | 0 | — |
 | process | 1 | LEARN-20250725-003 |
@@ -256,6 +302,8 @@ if TYPE_CHECKING:
 | testing | 1 | LEARN-20250725-003 |
 | textual | 1 | LEARN-20250725-001 |
 | typing | 1 | LEARN-20250726-002 |
+| web-search | 1 | LEARN-20260730-001 |
+| zero-config | 1 | LEARN-20260730-001 |
 
 ---
 
