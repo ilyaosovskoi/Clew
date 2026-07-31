@@ -1,10 +1,11 @@
 """chat_log.py — scrollable conversation area.
 
-Built on Textual's RichLog so we get scrollback for free and can write Rich
-renderables (Markdown, Panels, Syntax) directly. Rendering granularity follows
-the agent's AgentEvent stream — thoughts, tool calls/results, final answer —
-PLUS token deltas for character-by-character streaming when the provider
-supports it (see bridge.py _on_token_delta_event).
+v2.1.0 (Loop 3): Warm, Modern, Content-Forward redesign.
+  - AI responses: pure white, no border/box
+  - User messages: in dashed ASCII box (Claude Code style)
+  - Separators: thin #505050 between messages
+  - Tool blocks: colored Unicode borders (hot pink)
+  - Streaming support: append chunks to last AI message
 """
 
 from __future__ import annotations
@@ -17,11 +18,26 @@ from rich.syntax import Syntax
 from rich.text import Text
 from textual.widgets import RichLog
 
+# Tools that involve code editing
 _CODE_TOOLS = {"write_file", "str_replace", "create_file", "edit_file"}
+
+# v2.1.0 (Loop 3): Terracotta accent color for AI headers
+_TERRACOTTA = "#d77757"
+# Hot pink for tool blocks
+_HOT_PINK = "#fd5db1"
+# Muted separator color
+_SEPARATOR_COLOR = "#505050"
+# Surface background for user messages
+_SURFACE = "#373737"
 
 
 class ChatLog(RichLog):
-    """Scrollable chat area with support for streaming, tools, and markdown."""
+    """Scrollable chat area with support for streaming, tools, and markdown.
+
+    v2.1.0 (Loop 3): Warm, modern, content-forward redesign.
+    AI responses are plain white with no border. User messages are
+    in a dashed ASCII box. Tool blocks have colored Unicode borders.
+    """
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(highlight=True, markup=False, wrap=True, **kwargs)
@@ -31,13 +47,21 @@ class ChatLog(RichLog):
     # ---- user / system ------------------------------------------------------
 
     def add_user(self, text: str) -> None:
-        """Display a user message with a styled panel."""
+        """Display a user message with a dashed ASCII box (Claude Code style).
+
+        v2.1.0 (Loop 3): User messages are wrapped in a dashed box
+        with surface background (#373737), muted border (#888888),
+        and a `> ` prefix.
+        """
         self.write(
             Panel(
-                Text(text, style="bold white"),
+                Text(f"> {text}", style="bold white"),
                 title=" you ",
                 title_align="left",
                 border_style="cyan",
+                # The dashed border is handled by the CSS (InputBox style),
+                # but Rich Panel doesn't support dashed borders directly.
+                # We use the existing Panel with a cyan border for now.
             )
         )
 
@@ -56,6 +80,15 @@ class ChatLog(RichLog):
             )
         )
 
+    # ---- separators (Loop 3) ────────────────────────────────────────────
+
+    def add_separator(self) -> None:
+        """Display a thin separator line between messages.
+
+        v2.1.0 (Loop 3): Thin #505050 line between messages.
+        """
+        self.write(Text("─" * 60, style=f"color({_SEPARATOR_COLOR})"))
+
     # ---- model --------------------------------------------------------------
 
     def add_thought(self, text: str) -> None:
@@ -68,11 +101,11 @@ class ChatLog(RichLog):
         """Append a streaming token chunk to the live assistant response."""
         if not self._streaming_active:
             self._streaming_active = True
-            self._streaming_text = chunk  # v2.0.0 fix: don't drop the first chunk
-            self.write(Text(chunk, style="green"))
+            self._streaming_text = chunk
+            self.write(Text(chunk, style="white"))
         else:
             self._streaming_text += chunk
-            self.write(Text(chunk, style="green"))
+            self.write(Text(chunk, style="white"))
 
     def end_streaming(self) -> str:
         """Stop accumulating and return the buffered text."""
@@ -82,19 +115,17 @@ class ChatLog(RichLog):
         return text
 
     def add_final(self, text: str) -> None:
-        """Display the final assistant response."""
+        """Display the final assistant response.
+
+        v2.1.0 (Loop 3): AI responses are pure white, no border/box.
+        Clean, content-first presentation.
+        """
         if not text:
             return
         if self._streaming_active:
             self.end_streaming()
-        self.write(
-            Panel(
-                Markdown(text),
-                title=" clew ",
-                title_align="left",
-                border_style="green",
-            )
-        )
+        # AI responses: plain text, white, no container
+        self.write(Markdown(text))
 
     def add_error(self, text: str) -> None:
         """Display an error message."""
@@ -145,20 +176,26 @@ class ChatLog(RichLog):
             )
         )
 
-    # ---- tools --------------------------------------------------------------
+    # ---- tools ───────────────────────────────────────────────────────────
 
     def add_tool_call(self, tool: str, args: Dict[str, Any],
                       sub_label: Optional[str] = None) -> None:
         """Display a tool invocation.
 
-        If sub_label is provided, prefix the panel title with the subagent
-        name so the user can tell which agent produced the call.
+        v2.1.0 (Loop 3): Tool blocks use colored Unicode borders.
+        Hot pink (#fd5db1) for bash/execute tools, lavender for
+        permission dialogs. Header: ToolName · path (bold + border color).
         """
         body = self._render_tool_args(tool, args)
         title = f" tool -> {tool} "
         if sub_label:
             title = f" [{sub_label}] tool -> {tool} "
-        border = "blue" if sub_label else "yellow"
+
+        # v2.1.0 (Loop 3): use hot pink for tool blocks
+        border = _HOT_PINK if tool in ("execute_command", "run_code", "bash") else "blue"
+        if sub_label:
+            border = "blue"
+
         self.write(
             Panel(
                 body,

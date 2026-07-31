@@ -687,6 +687,159 @@ def create_learning_from_ci_failure(
     )
 
 
+# ── Missing verification detection (Loop 2) ───────────────────────────
+
+
+@dataclass
+class MissingVerificationSignal:
+    """Detected pattern where a task completion lacked self_verify
+    and was followed by a rollback or CI failure."""
+    task_description: str = ""
+    tools_used: List[str] = field(default_factory=list)
+    had_self_verify: bool = False
+    had_rollback: bool = False
+    had_ci_failure: bool = False
+    description: str = ""
+
+
+def detect_missing_verification(project_path: str) -> Optional[MissingVerificationSignal]:
+    """Check if recent task completion lacked self_verify call.
+
+    Uses the activity log to find the last task completion event,
+    then checks for self_verify tool calls in the same conversation
+    window. If missing AND a rollback/CI-failure follows, triggers
+    a learning entry.
+
+    This is a best-effort detection — it relies on the activity log
+    being present and populated. If the activity log is unavailable,
+    it silently returns None.
+
+    v2.1.0 (Loop 2 fix): the previous implementation called
+    ``ActivityLog.query(limit=..., project_path=...)``, a method that
+    does not exist on ``ActivityLog`` (real API: ``recent()``, ``get()``,
+    ``stats()``). Because the call was wrapped in a broad ``except
+    Exception``, this silently returned ``None`` on every invocation,
+    so the "G17 detects missing verification" hook never actually
+    fired. Fixed to use ``ActivityLog.recent()``. ``ActivityLog`` has
+    no built-in project scoping, so ``project_path`` is applied as a
+    best-effort filter on each entry's recorded ``path`` (entries with
+    no path — e.g. ``self_verify`` itself — are always kept so they
+    aren't dropped from the window).
+    """
+    try:
+        from clew.activity_log import get_activity_log
+        log = get_activity_log()
+        all_entries = log.recent(n=200)
+        entries = [
+            e for e in all_entries
+            if not e.get("path") or str(e.get("path", "")).startswith(str(project_path))
+        ][-50:]
+    except Exception:
+        return None
+
+    if not entries:
+        return None
+
+    # Walk the recent window and look for a self_verify call, plus any
+    # sign of a rollback or CI failure among the entries in it. (There
+    # is no "final_answer" / "done" activity entry to anchor on --
+    # final_answer is parsed by OutputParser, not dispatched through
+    # record_tool_call -- so task_description is best-effort from the
+    # most recent entry's title instead.)
+    had_self_verify = False
+    had_rollback = False
+    had_ci_failure = False
+    tools_used: List[str] = []
+    task_description = ""
+
+    for entry in entries:
+        entry_data = entry if isinstance(entry, dict) else {}
+        tool_name = entry_data.get("tool", "") or entry_data.get("kind", "")
+
+        if tool_name == "self_verify":
+            had_self_verify = True
+        if tool_name:
+            tools_used.append(tool_name)
+        title = entry_data.get("title", "")
+        if title:
+            task_description = title
+        haystack = " ".join(
+            str(entry_data.get(k, "") or "")
+            for k in ("summary", "result_preview", "command")
+        ).lower()
+        if "rollback" in haystack or "git reset --hard" in haystack or "revert" in haystack:
+            had_rollback = True
+        if "ci_failure" in haystack or "test failed" in haystack or "tests failed" in haystack:
+            had_ci_failure = True
+
+
+    # Only trigger if: no self_verify AND (rollback OR CI failure)
+    # This avoids false positives for tasks that completed successfully
+    # without verification (which is fine for read-only tasks).
+    if not had_self_verify and (had_rollback or had_ci_failure):
+        return MissingVerificationSignal(
+            task_description=task_description,
+            tools_used=tools_used,
+            had_self_verify=had_self_verify,
+            had_rollback=had_rollback,
+            had_ci_failure=had_ci_failure,
+            description=(
+                f"Task completed without self_verify, followed by "
+                f"{'rollback' if had_rollback else 'CI failure'}. "
+                f"Tools used: {', '.join(tools_used[:10]) or 'unknown'}"
+            ),
+        )
+    return None
+
+
+def create_learning_from_missing_verification(
+    project_path: str, signal: MissingVerificationSignal,
+) -> Dict[str, Any]:
+    """Auto-create a learning entry from a missing verification signal."""
+    return create_learning_entry(
+        project_path=project_path,
+        title="Task completed without self_verify, followed by failure",
+        context=(
+            "A task was marked as done without calling self_verify, "
+            "and was subsequently followed by a rollback or CI failure. "
+            "This suggests the agent should have verified its work "
+            "before reporting completion."
+        ),
+        what_happened=signal.description,
+        root_cause=(
+            "The agent completed the task without verifying the result. "
+            "Without self_verify, the agent cannot catch issues like "
+            "incorrect edits, missing files, or broken tests before "
+            "reporting success."
+        ),
+        evidence=(
+            f"had_self_verify: {signal.had_self_verify}\n"
+            f"had_rollback: {signal.had_rollback}\n"
+            f"had_ci_failure: {signal.had_ci_failure}\n"
+            f"tools_used: {', '.join(signal.tools_used[:10])}"
+        ),
+        do_rule=(
+            "Always call self_verify before reporting task completion "
+            "when the task involved writing or editing files."
+        ),
+        dont_rule=(
+            "Don't report task completion without verification when "
+            "files were modified — the changes may be incorrect."
+        ),
+        how_to_apply=(
+            "1. When the agent writes or edits files, call self_verify "
+            "before final_answer.\n"
+            "2. If self_verify reveals issues, fix them before "
+            "reporting completion.\n"
+            "3. For read-only tasks, self_verify is optional."
+        ),
+        source="AUTO-MISSING-VERIFICATION",
+        tags=["auto", "verification", "quality"],
+        severity="medium",
+        slug=f"missing-verification-{_today_str()}",
+    )
+
+
 # ── Scan + create on trigger ───────────────────────────────────────────
 
 
@@ -715,6 +868,13 @@ def scan_and_create_learnings(project_path: str) -> List[Dict[str, Any]]:
         result = create_learning_from_ci_failure(project_path, ci)
         if result.get("ok"):
             result["source"] = "ci_failure"
+            out.append(result)
+    # v2.1.0 (Loop 2): missing verification detection.
+    mv = detect_missing_verification(project_path)
+    if mv is not None:
+        result = create_learning_from_missing_verification(project_path, mv)
+        if result.get("ok"):
+            result["source"] = "missing_verification"
             out.append(result)
     return out
 

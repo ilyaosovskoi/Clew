@@ -145,6 +145,33 @@ class ClewTUIApp(App):
                 return  # _on_suggestion_selected handled it
             self._hide_suggestions()
 
+        # v2.1.0 (Loop 1): inline section switch — parse leading
+        # {section} or /mode section tokens before the message reaches
+        # the LLM. If a section token is found, switch section and show
+        # a toast, then pass the cleaned message to the bridge.
+        from clew.agent_runtime.section_parser import parse_section_switch
+        new_section, cleaned_prompt = parse_section_switch(prompt)
+        if new_section is not None:
+            result = self.bridge.set_section(new_section.value)
+            chat = self.query_one(ChatLog)
+            if result.get("ok"):
+                name = {"general": "General", "heavy_code": "Heavy Code", "office": "Office Worker"}.get(
+                    new_section.value, new_section.value)
+                chat.add_system(f"Section switched to: [b]{name}[/b]")
+                self._refresh_status("idle")
+            else:
+                chat.add_error(f"Failed to switch section: {result.get('error', 'unknown')}")
+            # If the cleaned message is empty (user just typed {office}
+            # or /mode office), don't send a turn — just switch section.
+            if not cleaned_prompt:
+                box = self.query_one(InputBox)
+                box.remember(prompt)
+                box.value = ""
+                box.focus()
+                return
+            # Otherwise, proceed with the cleaned message
+            prompt = cleaned_prompt
+
         # Slash command
         if prompt.startswith("/"):
             self._handle_slash_input(prompt)
@@ -299,6 +326,12 @@ class ClewTUIApp(App):
         # v2.1.0 (G18): web search backend status
         elif cmd == "/websearch":
             self._exec_websearch(arg)
+        # v2.1.0 (Loop 1): /mode slash command for section switching
+        elif cmd == "/mode":
+            self._exec_mode(arg)
+        # v2.1.0 (Loop 3): /theme slash command for theme switching
+        elif cmd == "/theme":
+            self._exec_theme(arg)
         else:
             self.query_one(ChatLog).add_system(
                 f"Unknown command: {cmd}. Type /help for available commands."
@@ -485,6 +518,71 @@ class ClewTUIApp(App):
             self._refresh_status("idle")
         else:
             chat.add_error(f"Failed to switch section: {result.get('error', 'unknown')}")
+        self.query_one(InputBox).focus()
+
+    def _exec_mode(self, arg: str) -> None:
+        """v2.1.0 (Loop 1): /mode slash command — show or switch section.
+
+        /mode              — show current section
+        /mode general      — switch to general
+        /mode heavy_code   — switch to heavy_code
+        /mode office       — switch to office
+        """
+        arg = (arg or "").strip()
+        if not arg:
+            # Show current section
+            chat = self.query_one(ChatLog)
+            name = {"general": "General", "heavy_code": "Heavy Code", "office": "Office Worker"}.get(
+                self.bridge.section, self.bridge.section)
+            chat.add_system(f"Current section: [b]{name}[/b]")
+            self.query_one(InputBox).focus()
+            return
+        # Reuse the section parser for consistency
+        from clew.agent_runtime.section_parser import parse_section_switch
+        # Use /mode prefix so the parser can handle it
+        new_section, _ = parse_section_switch(f"/mode {arg}")
+        if new_section is not None:
+            self._exec_section(new_section.value)
+        else:
+            self.query_one(ChatLog).add_error(
+                f"Unknown section: {arg}. Valid: general, heavy_code, office"
+            )
+            self.query_one(InputBox).focus()
+
+    def _exec_theme(self, arg: str) -> None:
+        """v2.1.0 (Loop 3): /theme slash command — switch or show theme.
+
+        /theme              — show current theme
+        /theme dark         — switch to dark theme
+        /theme light        — switch to light theme
+        """
+        arg = (arg or "").strip().lower()
+        if not arg:
+            # Show current theme
+            theme = "dark" if self._dark_theme else "light"
+            self.query_one(ChatLog).add_system(f"Current theme: [b]{theme}[/b]")
+            self.query_one(InputBox).focus()
+            return
+        if arg == "dark":
+            self._dark_theme = True
+            self.CSS_PATH = "styles_dark.tcss"
+            try:
+                self.reload_css()
+            except Exception:
+                pass
+            self.query_one(ChatLog).add_system("Theme switched to: [b]dark[/b]")
+        elif arg == "light":
+            self._dark_theme = False
+            self.CSS_PATH = "styles_light.tcss"
+            try:
+                self.reload_css()
+            except Exception:
+                pass
+            self.query_one(ChatLog).add_system("Theme switched to: [b]light[/b]")
+        else:
+            self.query_one(ChatLog).add_error(
+                f"Unknown theme: {arg}. Valid: dark, light"
+            )
         self.query_one(InputBox).focus()
 
     def _exec_model(self, provider_id: str) -> None:

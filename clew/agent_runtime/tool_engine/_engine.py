@@ -48,7 +48,14 @@ logger = logging.getLogger(__name__)
 class ToolEngine:
     """Executes agent tool calls in a sandboxed environment."""
 
-    RUN_TIMEOUT = 15
+    # v2.1.0 (Loop 2): default timeout raised from 15s to 180s.
+    # 15s was too short for npm install, pytest, cargo build, docker build.
+    # The constant is kept for backward compatibility but the actual
+    # per-call timeout is now configurable via the `timeout` parameter
+    # on _execute_command and _run_code.
+    RUN_TIMEOUT = 180
+    MAX_TIMEOUT = 3600  # 1-hour ceiling
+    MIN_TIMEOUT = 1     # minimum allowed
     MAX_OUTPUT = 2000
 
     def __init__(self, workspace: Optional[str] = None):
@@ -585,13 +592,19 @@ class ToolEngine:
         dispatch_map = {
             ToolName.READ_FILE: lambda: self._read_file(args.get("path", "")),
             ToolName.WRITE_FILE: lambda: self._write_file(args.get("path", ""), args.get("content", "")),
-            ToolName.RUN_CODE: lambda: self._run_code(args.get("code", ""), args.get("language", "python")),
+            ToolName.RUN_CODE: lambda: self._run_code(
+                args.get("code", ""), args.get("language", "python"),
+                timeout=int(args.get("timeout", 180) or 180),
+            ),
             ToolName.SEARCH_PROJECT: lambda: self._search_project(
                 args.get("query", ""), args.get("directory", "."), args.get("file_pattern", "*.py")
             ),
             ToolName.LIST_FILES: lambda: self._list_files(args.get("directory", "."), args.get("pattern", "*")),
             ToolName.APPLY_DIFF: lambda: self._apply_diff(args.get("path", ""), args.get("diff", "")),
-            ToolName.EXECUTE_COMMAND: lambda: self._execute_command(args.get("command", "")),
+            ToolName.EXECUTE_COMMAND: lambda: self._execute_command(
+                args.get("command", ""),
+                timeout=int(args.get("timeout", 180) or 180),
+            ),
             ToolName.GET_PROJECT_STRUCTURE: lambda: self._get_project_structure(args.get("directory", ".")),
             ToolName.DELETE_FILE: lambda: self._delete_file(args.get("path", "")),
             ToolName.RENAME_FILE: lambda: self._rename_file(args.get("old_path", ""), args.get("new_path", "")),
@@ -2375,9 +2388,12 @@ class ToolEngine:
             )
         return "OK"
 
-    def _run_code(self, code: str, language: str = "python") -> str:
+    def _run_code(self, code: str, language: str = "python", timeout: int = 180) -> str:
         if not code.strip():
             return "[EMPTY CODE]"
+
+        # v2.1.0 (Loop 2): configurable per-call timeout with bounds.
+        timeout = max(self.MIN_TIMEOUT, min(timeout, self.MAX_TIMEOUT))
 
         # v1.0.6-security: require user confirmation before running code
         # (C-RT-1). Without this, prompt injection in any file the agent
@@ -2437,12 +2453,15 @@ class ToolEngine:
                 # v1.0.6: use Popen + polling so Stop button can abort
                 # subprocess execution (M-RT-7). subprocess.run blocks
                 # for up to RUN_TIMEOUT with no cancellation.
+                # v2.1.0 (Loop 2): use configurable per-call timeout
+                # instead of the global RUN_TIMEOUT constant.
                 proc = subprocess.Popen(
                     cmd, shell=False,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     cwd=tmpdir, env=sandbox_env,
                 )
                 stdout, stderr = b"", b""
+                deadline = time.time() + timeout
                 try:
                     # Poll for completion, checking cancel every 0.5s
                     while proc.poll() is None:
@@ -2450,6 +2469,10 @@ class ToolEngine:
                             proc.kill()
                             proc.wait()
                             return f"[CANCELLED BY USER] run_code aborted"
+                        if time.time() > deadline:
+                            proc.kill()
+                            proc.wait()
+                            return f"[TIMEOUT] Exceeded {timeout}s"
                         time.sleep(0.5)
                     stdout = proc.stdout.read()
                     stderr = proc.stderr.read()
@@ -2469,7 +2492,7 @@ class ToolEngine:
                     parts.append(f"[EXIT CODE] {proc.returncode}")
                 return "\n".join(parts) if parts else "[NO OUTPUT]"
             except subprocess.TimeoutExpired:
-                return f"[TIMEOUT] Exceeded {self.RUN_TIMEOUT}s"
+                return f"[TIMEOUT] Exceeded {timeout}s"
             except FileNotFoundError as e:
                 return f"[RUNTIME NOT FOUND] {e}"
 
@@ -2715,8 +2738,13 @@ class ToolEngine:
                 )
         return None
 
-    def _execute_command(self, command: str) -> str:
-        """Execute command with shell=False security."""
+    def _execute_command(self, command: str, timeout: int = 180) -> str:
+        """Execute command with shell=False security.
+
+        v2.1.0 (Loop 2): timeout is now configurable per-call (default
+        180s, max 3600s, min 1s). The old global RUN_TIMEOUT=15 was too
+        short for npm install, pytest, cargo build, docker build.
+        """
         args, is_safe = _sanitize_command(command, project_root=str(self.workspace) if self.workspace else None)
         if not is_safe:
             return f"[SECURITY ERROR] Command blocked: {command}"
@@ -2729,17 +2757,20 @@ class ToolEngine:
         if not self._request_confirmation("execute_command", f"Run: {command}"):
             return f"[REJECTED BY USER] command cancelled: {command}"
 
+        # v2.1.0 (Loop 2): configurable per-call timeout with bounds.
+        timeout = max(self.MIN_TIMEOUT, min(timeout, self.MAX_TIMEOUT))
+
         try:
             # v1.0.6: use Popen + polling so Stop can abort the
             # subprocess (M-RT-7). subprocess.run blocks up to
-            # RUN_TIMEOUT with no cancellation path.
+            # timeout with no cancellation path.
             proc = subprocess.Popen(
                 args, shell=False,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 cwd=self.workspace,
             )
             stdout, stderr = b"", b""
-            deadline = time.time() + self.RUN_TIMEOUT
+            deadline = time.time() + timeout
             try:
                 while proc.poll() is None:
                     if self.is_cancelled():
@@ -2749,7 +2780,7 @@ class ToolEngine:
                     if time.time() > deadline:
                         proc.kill()
                         proc.wait()
-                        return f"[TIMEOUT] Command exceeded {self.RUN_TIMEOUT}s"
+                        return f"[TIMEOUT] Command exceeded {timeout}s"
                     time.sleep(0.25)
                 stdout = proc.stdout.read()
                 stderr = proc.stderr.read()
@@ -2999,6 +3030,3 @@ def _check_suspicious_url(url: str) -> Optional[str]:
             if len(value) >= 80 and re.fullmatch(r"[A-Za-z0-9+/=_\-]+", value):
                 return f"URL param {key!r} has a long base64-like value (>=80 chars)"
     return None
-
-
-

@@ -32,11 +32,11 @@ TOOL_SCHEMA = """Available tools (call exactly ONE per step using JSON):
 {"tool": "write_binary_file", "args": {"path": "relative/path/to/file", "content": "base64 encoded bytes"}}
 {"tool": "file_info", "args": {"path": "relative/path/to/file"}}
 {"tool": "undo_write", "args": {"path": "relative/path/to/file"}}
-{"tool": "run_code", "args": {"code": "python code to execute", "language": "python"}}
+{"tool": "run_code", "args": {"code": "python code to execute", "language": "python", "timeout": 180}}
 {"tool": "search_project", "args": {"query": "search term", "directory": ".", "file_pattern": "*.py"}}
 {"tool": "list_files", "args": {"directory": ".", "pattern": "**/*.py"}}
 {"tool": "apply_diff", "args": {"path": "file/to/patch", "diff": "unified diff string"}}
-{"tool": "execute_command", "args": {"command": "shell command to run"}}
+{"tool": "execute_command", "args": {"command": "shell command to run", "timeout": 180}}
 {"tool": "get_project_structure", "args": {"directory": "."}}
 {"tool": "git_status", "args": {}}
 {"tool": "git_diff", "args": {"staged": false, "path": "optional/file/path"}}
@@ -422,6 +422,14 @@ Context: {context}
 
 GENERAL_SYSTEM_SUFFIX = """
 # General Section: Self-Verify + Error Recovery
+
+## Verification Protocol
+Before reporting task completion, VERIFY your work:
+- Run tests / build commands to confirm changes work
+- Read modified files to confirm edits applied correctly
+- Check expected output files exist and have correct content
+- Use the `self_verify` tool for structured verification
+- If you cannot run builds or tests, state what you verified and what you could not
 
 ## Self-verification before final answer
 When your task involved writing or editing ANY file:

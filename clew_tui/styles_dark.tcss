@@ -1,51 +1,51 @@
-/* styles_dark.tcss - Clew TUI dark theme */
+/* styles_dark.tcss - Clew TUI dark theme (v2.1.0 Loop 3: Warm, Modern, Content-Forward) */
 
-/* Global styling */
+/* ── Global ─────────────────────────────────────────────────────── */
 Screen {
-    background: #0d1117;
-    color: #c9d1d9;
+    background: #1a1a1a;
+    color: #ffffff;
 }
 
-/* -- Status Bar -- */
+/* ── Status Bar ─────────────────────────────────────────────────── */
 StatusBar {
     dock: top;
     height: 3;
-    background: #161b22;
-    color: #c9d1d9;
-    border-bottom: tall #238636;
+    background: #1a1a1a;
+    color: #888888;
+    border-bottom: solid #505050;
 }
 
-/* -- Chat Log -- */
+/* ── Chat Log ───────────────────────────────────────────────────── */
 ChatLog {
     height: 1fr;
-    background: #0d1117;
+    background: #1a1a1a;
     padding: 1 2;
     scrollbar-size: 1 1;
 }
 
 ChatLog:focus {
-    scrollbar-color: #238636;
+    scrollbar-color: #d77757;
 }
 
-/* -- Input Box -- */
+/* ── Input Box (dashed ASCII, Claude Code style) ────────────────── */
 InputBox {
     dock: bottom;
     height: 3;
-    border: tall #238636;
+    border: dashed #888888;
     margin: 0 2 1 2;
-    background: #161b22;
+    background: #373737;
 }
 
 InputBox:focus {
-    border: tall #238636;
-    background: #161b22;
+    border: dashed #a6a6a6;
+    background: #373737;
 }
 
 InputBox:focus-within {
-    border: tall #238636;
+    border: dashed #a6a6a6;
 }
 
-/* -- Command Suggestions (inline, above input) -- */
+/* ── Command Suggestions (inline, above input) ──────────────────── */
 CommandSuggestions {
     dock: bottom;
     height: 0;
@@ -61,8 +61,8 @@ CommandSuggestions.visible {
 #suggestions-box {
     height: auto;
     max-height: 12;
-    background: #161b22;
-    border: tall #238636;
+    background: #1a1a1a;
+    border: tall #d77757;
     padding: 0 1;
 }
 
@@ -73,12 +73,12 @@ CommandSuggestions.visible {
 
 #suggestions-footer {
     height: 1;
-    color: #8b949e;
+    color: #888888;
     padding: 0 1;
     text-style: italic;
 }
 
-/* -- Approval Modal -- */
+/* ── Approval Modal ─────────────────────────────────────────────── */
 ApprovalModal {
     align: center middle;
 }
@@ -88,22 +88,22 @@ ApprovalModal {
     max-width: 100;
     height: auto;
     padding: 1 2;
-    border: thick #ffa500;
-    background: #161b22;
+    border: thick #ffc107;
+    background: #1a1a1a;
 }
 
 #approval-title {
     text-style: bold;
-    color: #ffa500;
+    color: #ffc107;
     margin-bottom: 1;
 }
 
 #approval-action {
-    color: #c9d1d9;
+    color: #ffffff;
 }
 
 #approval-summary {
-    color: #8b949e;
+    color: #888888;
     margin-bottom: 1;
 }
 
@@ -117,7 +117,7 @@ ApprovalModal {
     width: 100%;
 }
 
-/* -- Verification Modal (G4) -- */
+/* ── Verification Modal (G4) ────────────────────────────────────── */
 VerificationModal {
     align: center middle;
 }
@@ -128,8 +128,8 @@ VerificationModal {
     height: auto;
     max-height: 32;
     padding: 1 2;
-    border: thick #58a6ff;
-    background: #161b22;
+    border: thick #b1b9f9;
+    background: #1a1a1a;
 }
 
 #verify-title {
@@ -148,27 +148,27 @@ VerificationModal {
 }
 
 #verify-meta {
-    color: #8b949e;
+    color: #888888;
     margin-bottom: 1;
 }
 
 #verify-summary {
-    color: #c9d1d9;
+    color: #ffffff;
     margin-bottom: 1;
 }
 
 #verify-issues {
-    color: #ffa657;
+    color: #ffc107;
     margin-bottom: 1;
 }
 
 #verify-suggestions {
-    color: #79c0ff;
+    color: #b1b9f9;
     margin-bottom: 1;
 }
 
 #verify-raw {
-    color: #8b949e;
+    color: #888888;
     margin-bottom: 1;
 }
 
@@ -183,7 +183,7 @@ VerificationModal {
     width: 100%;
 }
 
-/* -- Command Palette -- */
+/* ── Command Palette ────────────────────────────────────────────── */
 CommandPalette {
     align: center bottom;
 }
@@ -193,15 +193,15 @@ CommandPalette {
     max-width: 80;
     height: auto;
     max-height: 22;
-    background: #161b22;
-    border: tall #238636;
+    background: #1a1a1a;
+    border: tall #d77757;
     padding: 0;
     margin-bottom: 4;
 }
 
 #palette-header {
-    background: #238636 20%;
-    color: #c9d1d9;
+    background: #d77757 20%;
+    color: #ffffff;
     padding: 0 1;
     height: 1;
     text-style: bold;
@@ -209,7 +209,7 @@ CommandPalette {
 
 #palette-filter {
     height: 3;
-    border: tall #238636;
+    border: tall #d77757;
     margin: 0 1;
     padding: 0;
 }
@@ -227,12 +227,52 @@ CommandPalette {
 
 #palette-footer {
     height: 1;
-    color: #8b949e;
+    color: #888888;
     padding: 0 1;
     text-style: italic;
 }
 
-/* Animation utilities for widgets */
-.animate-transition {
-    /* transition: all 0.2s ease-in-out; */
+/* ── Tool Block Widget ──────────────────────────────────────────── */
+ToolBlock {
+    height: auto;
+    margin: 0 2;
+    padding: 0 1;
+    border: tall #fd5db1;
+    background: #1a1a1a;
+}
+
+ToolBlock .tool-header {
+    color: #fd5db1;
+    text-style: bold;
+}
+
+ToolBlock .tool-content {
+    color: #ffffff;
+}
+
+/* ── Thinking Indicator ─────────────────────────────────────────── */
+ThinkingIndicator {
+    height: 1;
+    color: #d77757;
+    padding: 0 2;
+    text-style: bold;
+}
+
+/* ── Separator ──────────────────────────────────────────────────── */
+.separator {
+    color: #505050;
+}
+
+/* ── Diff colors ────────────────────────────────────────────────── */
+.diff-added {
+    background: #225c2b;
+}
+
+.diff-removed {
+    background: #7a2936;
+}
+
+/* ── Auto-accept mode ───────────────────────────────────────────── */
+.auto-accept {
+    color: #af87ff;
 }

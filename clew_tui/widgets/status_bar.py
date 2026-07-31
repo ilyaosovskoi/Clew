@@ -1,12 +1,11 @@
 """status_bar.py — status header with section indicator, provider info,
-session tokens, keyboard shortcuts, and animated spinner.
+session tokens, and animated spinner.
 
-The bar shows:
-  LEFT: section badge + Guardian level badge + animated state indicator (idle/thinking/tool)
-  CENTER: provider/model + tokens/cost
-  RIGHT: keyboard shortcut hints
-
-When thinking or running, a braille spinner animation plays.
+v2.1.0 (Loop 3): Warm, Modern, Content-Forward redesign.
+  - Terracotta (#d77757) as primary accent
+  - Right-aligned: model · tokens · cost · time · mode
+  - Muted (#888888) for secondary info
+  - Whimsical verbs for thinking indicator (when used standalone)
 """
 
 from __future__ import annotations
@@ -34,9 +33,17 @@ _SPINNER_FRAMES = [
     "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏",
 ]
 
+# v2.1.0 (Loop 3): Terracotta accent color
+_TERRACOTTA = "#d77757"
+_SHIMMER = "#eb9f7f"
+
 
 class StatusBar(Static):
-    """Top status bar with animated state indicators."""
+    """Top status bar with animated state indicators.
+
+    v2.1.0 (Loop 3): Warm terracotta primary + muted secondary.
+    Right-aligned: model · tokens · cost · time · mode.
+    """
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -51,9 +58,9 @@ class StatusBar(Static):
         self._spinner_frame: int = 0
         # Set initial content so _render() never returns None
         self.update(
-            " [cyan]General[/cyan]  "
-            " [green]●[/green] idle  |  [b]?[/b]/[dim]?[/dim]  "
-            " [dim]0 tok | $0.0000[/dim]\n"
+            f" [{_TERRACOTTA}]General[/{_TERRACOTTA}]  "
+            f" [green]●[/green] idle  |  [b]?[/b]/[dim]?[/dim]  "
+            f" [dim]0 tok | $0.0000[/dim]\n"
             "[dim]Enter=send | /=cmds | Ctrl+C=stop | Ctrl+D=quit[/dim]"
         )
 
@@ -85,27 +92,31 @@ class StatusBar(Static):
         self._refresh_display()
 
     def _refresh_display(self) -> None:
-        """Rebuild and update the status bar text."""
+        """Rebuild and update the status bar text.
+
+        v2.1.0 (Loop 3): Terracotta primary + muted layout.
+        """
         state = self._state
 
         # State indicator with spinner or static icon
         if state == "thinking":
             icon = _SPINNER_FRAMES[self._spinner_frame % len(_SPINNER_FRAMES)]
-            state_markup = f"[yellow]{icon} thinking[/yellow]"
+            state_markup = f"[{_TERRACOTTA}]{icon} thinking[/{_TERRACOTTA}]"
         elif state == "running":
             icon = _SPINNER_FRAMES[self._spinner_frame % len(_SPINNER_FRAMES)]
-            state_markup = f"[yellow]{icon} tool running[/yellow]"
+            state_markup = f"[{_TERRACOTTA}]{icon} tool running[/{_TERRACOTTA}]"
         else:
             state_markup = "[green]●[/green] idle"
 
+        # Section badge — terracotta accent
         section_label = SECTION_LABELS.get(self._section, self._section.title())
         section_style = {
-            "general": "cyan",
+            "general": _TERRACOTTA,
             "heavy_code": "magenta",
             "office": "yellow",
-        }.get(self._section, "cyan")
+        }.get(self._section, _TERRACOTTA)
 
-        # Guardian badge (v2.0.0)
+        # Guardian badge
         g_label, g_color = GUARDIAN_LABELS.get(self._guardian, ("off", "grey62"))
         guardian_markup = f"[{g_color}]guardian:{g_label}[/{g_color}]"
 

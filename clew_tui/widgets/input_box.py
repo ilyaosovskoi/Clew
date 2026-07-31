@@ -1,9 +1,10 @@
 """input_box.py — bottom input line with command history and slash trigger.
 
-Up/Down cycle through previously submitted prompts, like a shell.
-Typing "/" at the start opens inline suggestions above the input.
-Enter is handled EXPLICITLY here (bypassing Input.Submitted which
-doesn't fire in older Textual versions).
+v2.1.0 (Loop 3): Warm, Modern, Content-Forward redesign.
+  - Dashed ASCII border (Claude Code style)
+  - `> ` prefix for user messages
+  - Surface background (#373737)
+  - Muted border (#888888) with shimmer (#a6a6a6)
 """
 
 from __future__ import annotations
@@ -15,9 +16,17 @@ from textual.widgets import Input
 
 
 class InputBox(Input):
+    """Bottom input line with command history and slash trigger.
+
+    v2.1.0 (Loop 3): Dashed ASCII border, muted border color,
+    surface background. The dashed border is handled by the CSS
+    (border: dashed #888888), but the `> ` prefix is shown in
+    the placeholder text.
+    """
+
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
-            placeholder=" Ask clew... (Enter=send, / for commands) ",
+            placeholder=" > your message here_ (Enter=send, / for commands) ",
             **kwargs,
         )
         self._history: List[str] = []

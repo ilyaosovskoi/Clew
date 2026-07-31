@@ -116,6 +116,10 @@ class ClewBridge(QObject):
     lsp_definitions_ready  = Signal(str, list)  # uri, List[Location dict]
     lsp_diagnostics_ready  = Signal(str, list)  # uri, List[Diagnostic dict]
     lsp_server_status      = Signal(bool, str)  # is_running, message
+    # v2.1.0 (Loop 1): section switch — emitted when a leading {section}
+    # or /mode section token is parsed from a user message. JS can update
+    # the mode indicator in the UI.
+    section_changed        = Signal(str)  # new section id
 
     def __init__(self, project_root: Optional[str] = None, parent=None):
         super().__init__(parent)
@@ -667,6 +671,27 @@ class ClewBridge(QObject):
         text = (opts.get("text") or "").strip()
         if not text:
             return {"ok": False, "error": "Empty prompt"}
+
+        # v2.1.0 (Loop 1): inline section switch — parse leading
+        # {section} or /mode section tokens before the message reaches
+        # the LLM. If a section token is found, switch section and emit
+        # a signal to update the UI mode indicator, then pass the
+        # cleaned message to the runtime.
+        from clew.agent_runtime.section_parser import parse_section_switch
+        new_section, cleaned_text = parse_section_switch(text)
+        if new_section is not None:
+            # Switch the section in the agent (if running)
+            if self._agent is not None:
+                try:
+                    self._agent.set_section(new_section.value)
+                except Exception:
+                    pass
+            self.section_changed.emit(new_section.value)
+            # If cleaned text is empty, just switch section — don't send
+            if not cleaned_text:
+                chat_id = opts.get("chat_id", "")
+                return {"ok": True, "section_switched": new_section.value, "chat_id": chat_id}
+            text = cleaned_text
 
         # Get or create chat
         chat_id = opts.get("chat_id")
