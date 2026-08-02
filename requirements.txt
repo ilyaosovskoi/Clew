@@ -25,6 +25,10 @@ toml>=0.10.2
 pyyaml>=6.0
 pygments>=2.18.0
 rich>=13.7.0
+# .gitignore-aware file filtering in clew/code_viewer.py. Imported lazily
+# with a graceful no-op fallback (convention #4) — same pattern as the
+# cryptography entry below.
+pathspec>=0.10.0
 
 # v2.0: full-screen terminal UI (clew_tui/, `python -m clew_tui`)
 textual>=0.60.0

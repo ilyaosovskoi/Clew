@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -103,6 +104,13 @@ class CodeViewerService:
         self._root: Optional[Path] = Path(root).resolve() if root else None
         self._watcher = None
         self._watch_callback: Optional[Callable[[str, str], None]] = None
+        # .gitignore matcher (pathspec.PathSpec or None). Guarded by
+        # _ignore_lock per project convention #1 (thread safety). When
+        # pathspec is not installed or no .gitignore exists, this stays
+        # None and the .gitignore layer is a no-op (convention #4:
+        # graceful degradation). Built lazily in set_root().
+        self._ignore_matcher: Optional[Any] = None
+        self._ignore_lock = threading.RLock()
 
     # ── Root management ───────────────────────────────────────────
 
@@ -112,11 +120,87 @@ class CodeViewerService:
             raise FileNotFoundError(f"Project root does not exist: {new_root}")
         self._root = new_root
         logger.info(f"[code_viewer] root = {self._root}")
+        # Rebuild the .gitignore matcher for the new root BEFORE starting
+        # the watcher — _collect_watched_dirs() consults the matcher to
+        # avoid watching ignored directories.
+        with self._ignore_lock:
+            self._ignore_matcher = self._build_gitignore_matcher()
         self._start_watcher()
 
     @property
     def root(self) -> Optional[Path]:
         return self._root
+
+    # ── .gitignore support ───────────────────────────────────────
+
+    def _build_gitignore_matcher(self) -> Optional[Any]:
+        """Build a pathspec matcher from ``<root>/.gitignore``.
+
+        Returns a ``pathspec.PathSpec`` (``gitignore`` matcher — the
+        non-deprecated name for what pathspec used to call
+        ``gitwildmatch``) or ``None`` when:
+          - ``pathspec`` is not installed (graceful degradation —
+            convention #4; the .gitignore layer becomes a no-op and
+            the existing IGNORED_DIRS/IGNORED_FILES filters still apply),
+          - ``self._root`` is not set,
+          - the root has no ``.gitignore`` file,
+          - the file cannot be read.
+
+        Only the ROOT ``.gitignore`` is parsed here. Nested ``.gitignore``
+        files (per-subdirectory scoping) are a future enhancement —
+        supporting them would require tracking matchers per directory
+        during the walk.
+        """
+        if self._root is None:
+            return None
+        try:
+            import pathspec  # lazy import — graceful fallback if missing
+        except ImportError:
+            logger.debug(
+                "[code_viewer] pathspec not installed — .gitignore layer disabled"
+            )
+            return None
+        gitignore_path = self._root / ".gitignore"
+        if not gitignore_path.is_file():
+            return None
+        try:
+            with open(gitignore_path, "r", encoding="utf-8", errors="replace") as f:
+                # pathspec handles comment lines (leading #) and blanks
+                # itself, so we hand it the raw lines without filtering.
+                lines = f.read().splitlines()
+        except OSError as e:
+            logger.warning(f"[code_viewer] failed to read .gitignore: {e}")
+            return None
+        try:
+            # pathspec >=0.10 prefers the ``gitignore`` matcher name;
+            # the older ``gitwildmatch`` name is deprecated and emits a
+            # DeprecationWarning. ``gitignore`` implements full .gitignore
+            # semantics (negation, root-anchoring, directory trailing-slash).
+            return pathspec.PathSpec.from_lines("gitignore", lines)
+        except Exception as e:  # pathspec shouldn't raise on bad lines, but be safe
+            logger.warning(f"[code_viewer] failed to parse .gitignore: {e}")
+            return None
+
+    def _is_ignored(self, rel_path: str, is_dir: bool = False) -> bool:
+        """Return True if ``rel_path`` matches a ``.gitignore`` pattern.
+
+        ``rel_path`` is a project-root-relative path. It is normalized to
+        forward slashes (pathspec patterns are POSIX-style). For
+        directories (``is_dir=True``) a trailing slash is appended so
+        directory-only patterns like ``secrets/`` match.
+
+        Thread-safe: snapshots the matcher under ``_ignore_lock`` then
+        matches outside the lock to avoid holding it during pathspec
+        work. Returns False when no matcher is configured (no-op).
+        """
+        with self._ignore_lock:
+            matcher = self._ignore_matcher
+        if matcher is None:
+            return False
+        rel = rel_path.replace(os.sep, "/")
+        if is_dir:
+            rel = rel + "/"
+        return bool(matcher.match_file(rel))
 
     # ── Listing ───────────────────────────────────────────────────
 
@@ -132,6 +216,10 @@ class CodeViewerService:
             for entry in sorted(self._root.iterdir()):
                 if entry.name in IGNORED_DIRS or entry.name in IGNORED_FILES:
                     continue
+                # .gitignore layer (additive on top of IGNORED_* sets)
+                rel_path = str(entry.relative_to(self._root))
+                if self._is_ignored(rel_path, is_dir=entry.is_dir()):
+                    continue
                 if entry.is_dir():
                     entries.extend(self._scan_dir(entry, entry.name.capitalize()))
                 elif entry.is_file():
@@ -146,6 +234,11 @@ class CodeViewerService:
         try:
             for entry in sorted(dir_path.iterdir()):
                 if entry.name in IGNORED_DIRS or entry.name in IGNORED_FILES:
+                    continue
+                # .gitignore layer — skip ignored entries. For dirs this
+                # also skips recursion (don't descend into ignored dirs).
+                rel_path = str(entry.relative_to(self._root))
+                if self._is_ignored(rel_path, is_dir=entry.is_dir()):
                     continue
                 if entry.is_dir():
                     out.extend(self._scan_dir(entry, section))
@@ -309,12 +402,25 @@ class CodeViewerService:
 
     def _iter_files(self):
         for root, dirs, files in os.walk(self._root):
-            # prune ignored dirs in-place
+            # prune ignored dirs in-place (os.walk mutates `dirs`)
             dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
+            # .gitignore layer — also prune .gitignore-ignored dirs so
+            # os.walk does not descend into them.
+            dirs[:] = [
+                d
+                for d in dirs
+                if not self._is_ignored(
+                    os.path.relpath(os.path.join(root, d), self._root),
+                    is_dir=True,
+                )
+            ]
             for name in files:
                 if name in IGNORED_FILES:
                     continue
                 p = Path(root) / name
+                # .gitignore layer — skip ignored files.
+                if self._is_ignored(os.path.relpath(str(p), self._root), is_dir=False):
+                    continue
                 # v1.0.6: catch OSError on stat() — file may have been
                 # deleted between os.walk and stat (M-AUTO-4).
                 try:
@@ -394,6 +500,15 @@ class CodeViewerService:
             for root, dirs, _files in os.walk(self._root):
                 # prune ignored dirs in-place (os.walk mutates `dirs`)
                 dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
+                # .gitignore layer — don't watch ignored dirs either.
+                dirs[:] = [
+                    d
+                    for d in dirs
+                    if not self._is_ignored(
+                        os.path.relpath(os.path.join(root, d), self._root),
+                        is_dir=True,
+                    )
+                ]
                 for d in dirs:
                     out.append(os.path.join(root, d))
                     if len(out) >= self.MAX_WATCHED_DIRS:
