@@ -248,7 +248,7 @@ class Notifier:
 
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
         self._backends: Dict[str, NotifierBackend] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # re-entrant: status() calls list_backends()
         self._history: List[Dict[str, Any]] = []
         self._max_history: int = 200
 
