@@ -336,8 +336,18 @@ def test_status():
 
 # ── 11. API error handling ──────────────────────────────────────────────
 
-def test_api_no_token():
+def test_api_no_token(monkeypatch, tmp_path):
     from clew.github_automation import GitHubAutomation
+
+    # _load_token() reads GITHUB_TOKEN from the environment (first) and then
+    # the token file at ~/.clew/github_token. Either would override the empty
+    # token passed below — e.g. GITHUB_TOKEN is auto-injected on GitHub Actions
+    # runners, and a developer may have a token file locally. Patch both so the
+    # test is robust in any environment.
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.setattr(
+        "clew.github_automation._token_path", lambda: tmp_path / "absent"
+    )
     gh = GitHubAutomation(token="")
     result = gh._api_request("GET", "/pulls")
     assert result["ok"] is False
