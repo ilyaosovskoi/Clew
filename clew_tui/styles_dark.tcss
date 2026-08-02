@@ -258,6 +258,18 @@ ThinkingIndicator {
     text-style: bold;
 }
 
+/* ── Task Canvas View (G19a) ───────────────────────────────────── */
+TaskCanvasView {
+    dock: bottom;
+    height: auto;
+    max-height: 8;
+    margin: 0 2 0 2;
+    padding: 0 1;
+    background: #1a1a1a;
+    border-top: solid #505050;
+    color: #888888;
+}
+
 /* ── Separator ──────────────────────────────────────────────────── */
 .separator {
     color: #505050;

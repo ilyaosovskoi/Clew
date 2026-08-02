@@ -141,6 +141,17 @@ class AgentRuntime:
         # v1.0.11: skills — load from project + user-global + builtins
         self._skills: List[Any] = []
         self._reload_skills()
+        # G20b — provider/model override for sub-agent routing. When set
+        # (via set_provider_override()), _generate_with_retry uses this
+        # provider+model instead of registry.active. Used by the task-
+        # decomposition router to place each subtask on a different model.
+        # Both default to None (= use the registry's active provider/model,
+        # preserving today's behavior). The override is per-runtime, NOT
+        # per-call, so a child runtime spawned with an override uses that
+        # override for its entire lifetime — clean separation, no leakage
+        # back to the parent.
+        self._provider_override: Optional[str] = None
+        self._model_override: Optional[str] = None
 
         logger.info("AgentRuntime initialized (Provider-backed)")
 
@@ -175,9 +186,18 @@ class AgentRuntime:
         ContextMemory and ContextManager instances from their __init__.
         """
         try:
-            if not self._registry or not getattr(self._registry, "_active_id", None):
-                return
-            provider = self._registry.active
+            # G20b: respect provider_override when sizing budgets — the
+            # override provider may have a different context window.
+            if self._provider_override:
+                if not self._registry:
+                    return
+                provider = self._registry.get(self._provider_override)
+                if provider is None:
+                    return
+            else:
+                if not self._registry or not getattr(self._registry, "_active_id", None):
+                    return
+                provider = self._registry.active
             window = 8_192
             try:
                 window = int(provider.get_context_window())
@@ -220,6 +240,67 @@ class AgentRuntime:
         just muting UI updates while the loop keeps running.
         """
         self.tools._cancel_check = fn
+
+    # G20b — provider/model override for sub-agent routing
+    def set_provider_override(
+        self,
+        provider_id: Optional[str],
+        model: Optional[str] = None,
+    ) -> None:
+        """Override which provider+model this runtime uses for LLM calls.
+
+        When ``provider_id`` is set, the runtime looks up that provider in
+        its ``ProviderRegistry`` (instead of using ``registry.active``)
+        on every LLM call. When ``model`` is also set, it is passed to
+        ``provider.generate(messages, model=model)`` — overriding the
+        provider's configured model.
+
+        Passing ``None`` for both clears the override and reverts to the
+        registry's active provider (today's behavior).
+
+        Used by :class:`clew.task_decomposition_router.TaskDecompositionRouter`
+        to place each subtask on a different model — the child runtime is
+        constructed normally, then ``set_provider_override(pid, model)``
+        is called before the child's first LLM call.
+        """
+        self._provider_override = provider_id or None
+        self._model_override = model or None
+        # Re-sync context budgets — the override provider may have a
+        # different context window than the active one. Cheap if the
+        # override matches the active provider.
+        self._sync_context_budgets()
+
+    def _get_active_provider(self) -> Any:
+        """Return the provider this runtime should call.
+
+        G20b: if ``_provider_override`` is set, look it up in the
+        registry (and ``.load()`` it if needed). Otherwise fall back to
+        ``registry.active`` (today's behavior).
+
+        Raises ``RuntimeError`` if the override is set but the registry
+        has no provider with that id — better to fail loudly than to
+        silently fall back to a different model the user didn't ask for.
+        """
+        if self._provider_override:
+            if not self._registry:
+                raise RuntimeError(
+                    f"provider_override={self._provider_override!r} set "
+                    "but no registry available"
+                )
+            provider = self._registry.get(self._provider_override)
+            if provider is None:
+                raise RuntimeError(
+                    f"provider_override={self._provider_override!r} not "
+                    f"found in registry (configured: "
+                    f"{getattr(self._registry, '_providers', {}).keys() if self._registry else []})"
+                )
+            if hasattr(provider, "is_loaded") and not provider.is_loaded:
+                provider.load()
+            return provider
+        provider = self._registry.active
+        if hasattr(provider, "is_loaded") and not provider.is_loaded:
+            provider.load()
+        return provider
 
     def set_token_tracker(self, tracker: Optional[Any]) -> None:
         """Attach (or detach) a token tracker for real usage accounting.
@@ -442,7 +523,7 @@ class AgentRuntime:
 
         Returns (text, tokens_in, tokens_out).
         """
-        provider = self._registry.active
+        provider = self._get_active_provider()
         if not provider.is_loaded:
             provider.load()
         messages: List[ProviderMessage] = []
@@ -463,7 +544,7 @@ class AgentRuntime:
 
         Returns (text, tokens_in, tokens_out).
         """
-        provider = self._registry.active
+        provider = self._get_active_provider()
         if not provider.is_loaded:
             provider.load()
         messages: List[ProviderMessage] = [
@@ -561,7 +642,14 @@ class AgentRuntime:
 
         for attempt in range(1, self._RETRY_MAX_ATTEMPTS + 1):
             try:
-                resp = provider.generate(messages)
+                # G20b: pass model_override to provider.generate() if set.
+                # consensus_engine does the same — provider.generate()
+                # accepts an optional ``model`` kwarg that overrides the
+                # provider's configured model for this call only.
+                if self._model_override:
+                    resp = provider.generate(messages, model=self._model_override)
+                else:
+                    resp = provider.generate(messages)
                 elapsed = time.time() - call_start
                 logger.info("[agent] LLM call completed in %.1fs — provider=%s model=%s tokens_in=%d tokens_out=%d",
                             elapsed, provider.provider_id, model_name,
@@ -662,7 +750,16 @@ class AgentRuntime:
             try:
                 full_text: List[str] = []
                 chunk_count = 0
-                for chunk in provider.stream(messages):
+                # G20b: thread model_override into the streaming call
+                # too. provider.stream() accepts the same ``model`` kwarg
+                # as provider.generate() — verified in the providers'
+                # base class (clew/providers/base.py).
+                stream_kwargs = (
+                    {"model": self._model_override}
+                    if self._model_override
+                    else {}
+                )
+                for chunk in provider.stream(messages, **stream_kwargs):
                     # Check cancellation between chunks so Ctrl+C still works.
                     if self.tools.is_cancelled():
                         logger.info("[agent] stream cancelled after %d chunks", chunk_count)
@@ -1070,6 +1167,33 @@ class AgentRuntime:
                 "spawn_multi_agents are available. See the "
                 "HEAVY_CODE_SYSTEM_SUFFIX above for when to use them."
             )
+        # G19a — Symbolic task canvas. Injected ONCE per turn (replace,
+        # not append) via the existing fragment system so it tombstone-
+        # compacts like every other tool output. Stable id means
+        # re-emission each turn is idempotent — the compactor keeps only
+        # the latest per-id, so the canvas never accumulates across
+        # turns even though we inject it every turn. Bounded token cost
+        # (~few hundred tokens max) regardless of task graph size.
+        try:
+            from clew.agent.task_canvas import get_task_canvas
+            canvas_fragment = get_task_canvas().to_fragment()
+            if canvas_fragment:
+                system_prompt = system_prompt + "\n\n" + canvas_fragment
+        except Exception as e:
+            logger.debug("[agent] task canvas injection failed: %s", e)
+        # G19b — Persona memory. Cross-session, per-user profile
+        # (~/.clew/persona.md, hard-capped at ~2000 chars). Injected via
+        # the same fragment discipline so it tombstone-compacts and
+        # never becomes a second source of permanent bloat. Mirrors the
+        # G17 learnings injection point — both are "persistent context
+        # the model should always see" and belong together.
+        try:
+            from clew.agent.persona_memory import get_persona_memory
+            persona_fragment = get_persona_memory().to_fragment()
+            if persona_fragment:
+                system_prompt = system_prompt + "\n\n" + persona_fragment
+        except Exception as e:
+            logger.debug("[agent] persona injection failed: %s", e)
         initial_user_prompt = PromptBuilder.task_prompt(
             task, plan=plan, history=self.memory.to_prompt_history()
         )
@@ -1451,7 +1575,8 @@ class AgentRuntime:
                    **gen_kwargs) -> Generator[str, None, None]:
         task = Task(type=task_type, description=description, context=context, language=language)
         try:
-            provider = self._registry.active
+            # G20b: respect provider_override for streaming calls too.
+            provider = self._get_active_provider()
             if not provider.is_loaded:
                 provider.load()
             messages = [

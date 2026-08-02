@@ -1486,7 +1486,9 @@ class ToolEngine:
             return f"[LIST_MCP_TOOLS ERROR] {e}"
 
     def _spawn_subagent(self, goal: str, role: str = "generalist",
-                        max_iterations: int = 4) -> str:
+                        max_iterations: int = 4,
+                        provider_override: Optional[str] = None,
+                        model_override: Optional[str] = None) -> str:
         """Spawn a single sub-agent for a sub-task (orchestrator-worker
         pattern). The sub-agent runs in its own AgentRuntime instance
         with a narrower scope and returns its final answer as the
@@ -1500,6 +1502,13 @@ class ToolEngine:
         They are read-only by default (no write tools) to prevent
         uncontrolled side effects. Pass role="implementer" to allow
         writes (still subject to the parent's autonomy setting).
+
+        G20b: ``provider_override`` / ``model_override`` let the caller
+        route this specific sub-agent to a DIFFERENT model than the
+        parent's active one. Used by the task-decomposition router to
+        place each subtask on whichever configured model is best suited
+        for it. When both are None, the sub-agent uses the parent's
+        active provider/model (today's behavior).
         """
         if not goal or not goal.strip():
             return "[SUBAGENT ERROR] goal is required"
@@ -1509,6 +1518,8 @@ class ToolEngine:
                 role=role or "generalist",
                 max_iterations=int(max_iterations or 4),
                 label="subagent",
+                provider_override=provider_override,
+                model_override=model_override,
             )
         except Exception as e:
             return f"[SUBAGENT ERROR] {e}"
@@ -1733,7 +1744,9 @@ class ToolEngine:
                                 max_iterations: int,
                                 label: str,
                                 watchdog_entry: Optional[Dict[str, Any]] = None,
-                                event_tap: Optional[Callable] = None) -> str:
+                                event_tap: Optional[Callable] = None,
+                                provider_override: Optional[str] = None,
+                                model_override: Optional[str] = None) -> str:
         """Internal helper: spawn a child AgentRuntime and run it to
         completion. Used by both _spawn_subagent (single) and
         _spawn_multi_agents (parallel).
@@ -1758,6 +1771,16 @@ class ToolEngine:
         ``_spawn_multi_agents`` to capture TOOL_RESULT observations for
         REPEAT detection. If provided, it IS the entire event callback
         for the child (no separate parent_on_event wrap is needed).
+
+        G20b: ``provider_override`` / ``model_override`` route this
+        specific child to a different model than the parent's active one.
+        When set, ``child.set_provider_override(pid, model)`` is called
+        after construction (and before the first LLM call) so the child
+        uses the override for its entire lifetime. When both are None,
+        the child uses the parent's active provider/model (today's
+        behavior). The override does NOT propagate to grand-children —
+        a child spawning its own sub-agent would have to pass the
+        override down explicitly.
         """
         if not self._registry:
             return f"[{label}] no provider registry available"
@@ -1831,6 +1854,27 @@ class ToolEngine:
         # model ignores the prompt and emits write_file/str_replace/
         # delete_file/etc., the dispatch will be rejected.
         child.tools.set_role_whitelist(role)
+        # G20b — apply provider/model override if the caller requested a
+        # different model than the parent's active one. Done AFTER
+        # construction (matching the existing pattern: cancel/quota/
+        # autonomy/role-whitelist are all wired post-construction too).
+        # set_provider_override() also re-syncs context budgets so the
+        # child sizes its memory window to the override provider's
+        # context window, not the parent's.
+        if provider_override or model_override:
+            try:
+                child.set_provider_override(provider_override, model_override)
+            except Exception as e:
+                # Don't fail the whole spawn — log and fall back to the
+                # parent's active provider. The task-decomposition router
+                # treats this as a soft failure (the subtask still runs,
+                # just on the parent's model instead of the requested one).
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "[subagent] provider_override failed (%s/%s): %s — "
+                    "falling back to parent's active provider",
+                    provider_override, model_override, e,
+                )
         # Note: sub-agent's diff-review/confirm callbacks are NOT wired
         # to the parent UI — they fail open (headless mode), which is
         # fine because sub-agents are read-only by default. For

@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="./clew-source/assets/logo.png" alt="Clew Logo" width="180"/>
+<img src="./clew/assets/logo.png" alt="Clew Logo" width="180"/>
 
 <br/>
 
-# 🧵 Clew — Native AI Coding IDE
+# Clew — Native AI Coding IDE & Agent Runtime
 
-### The next-generation free AI coding tool for everyone. **16 providers** · **ReAct agents** · **MCP support** · **Guardian safety** · **Zero telemetry**.
+### A free, local-first AI coding tool. **16 providers** · **ReAct agents** · **MCP server** · **Guardian safety** · **Zero telemetry**
 
-**Build with Claude, GPT, Gemini, DeepSeek, z.ai, or run 100% offline with local models.**
+**Build with Claude, GPT, Gemini, DeepSeek, Groq, xAI, z.ai, Mistral, or run 100% offline with Ollama / LM Studio.**
 <br/>
 
-**Native desktop app for macOS, Windows & Linux. Your code never leaves your machine unless you choose otherwise.**
+**Desktop GUI (Qt), terminal UI (Textual), headless CLI, HTTP daemon, and MCP server — your code never leaves your machine unless you choose otherwise.**
 
 <br/>
 
@@ -28,13 +28,14 @@
 </br>
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue?style=for-the-badge&logo=python)](https://www.python.org/)
+[![Textual](https://img.shields.io/badge/TUI-Textual-purple?style=for-the-badge)](https://textual.textualize.io/)
 [![Qt](https://img.shields.io/badge/Qt-PySide6-green?style=for-the-badge&logo=qt)](https://www.qt.io/)
 [![Privacy](https://img.shields.io/badge/Privacy-Local--First-orange?style=for-the-badge)]()
 [![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)]()
 
 <br/>
 
-**[✨ Features](#-key-features)** · **[🤖 Providers](#-ai-providers--15-supported)** · **[🛠️ Tech Stack](#-tech-stack)** · **[🤝 Contributing](#-contributing)**
+**[Architecture](docs/ARCHITECTURE.md)** · **[CHANGELOG](docs/CHANGELOG.md)** · **[Contributing](docs/CONTRIBUTING.md)**
 
 </div>
 
@@ -42,23 +43,23 @@
 
 <div align="center">
 
-# 💥 The Promise
+## The Promise
 
 </div>
 
-> **Clew = Cursor + LM Studio + Multi-API Gateway, all in one app.**
-> No Python dependencies to install. No telemetry. Absolute privacy for local models, with the flexibility to plug in cloud APIs. Your workflow, supercharged by AI.
+> **Clew is a full self-serve AI coding environment: desktop GUI, terminal TUI, headless CLI, and remote daemon — all sharing one agent runtime.**
+> **16 built-in providers, plus user-defined custom providers and 200+ more via OpenRouter. No telemetry. Absolute privacy for local models, with the flexibility to plug in cloud APIs.**
 
 <table>
   <tr>
-    <td width="33%" valign="top"><b>🔒 Privacy-First</b><br/><sub>Local models run 100% on-device. No telemetry, no tracking, no cloud unless you want it.</sub></td>
-    <td width="33%" valign="top"><b>🧠 16 AI Providers</b><br/><sub>Anthropic, OpenAI, Gemini, DeepSeek, Groq, xAI, z.ai, or run Llama/Mistral/Qwen locally via Ollama or LM Studio.</sub></td>
-    <td width="33%" valign="top"><b>⚡ Native Performance</b><br/><sub>Qt-powered desktop app with real-time streaming, instant file search, live token tracking.</sub></td>
+    <td width="33%" valign="top"><b>Privacy-First</b><br/><sub>Local models run 100% on-device. No analytics, no crash reports, no cloud unless you opt in.</sub></td>
+    <td width="33%" valign="top"><b>16 AI Providers</b><br/><sub>Anthropic, OpenAI, Gemini, DeepSeek, Groq, xAI, z.ai, Mistral, Nvidia NIM, and more, or run Llama/Mistral/Qwen locally via Ollama or LM Studio.</sub></td>
+    <td width="33%" valign="top"><b>Multi-Frontend</b><br/><sub>Qt desktop app, Textual TUI, headless CLI, HTTP daemon with SSE, messenger control (Telegram/Discord/Slack), and MCP server.</sub></td>
   </tr>
   <tr>
-    <td width="33%" valign="top"><b>🤖 ReAct Agent Runtime</b><br/><sub>Autonomous coding agents that read, write, run code, and iterate until the task is done.</sub></td>
-    <td width="33%" valign="top"><b>🧩 MCP Protocol Support</b><br/><sub>Model Context Protocol integration — connect external tools and knowledge bases.</sub></td>
-    <td width="33%" valign="top"><b>📂 Smart Context</b><br/><sub>Intelligent file selection, git-aware filtering, live project indexing.</sub></td>
+    <td width="33%" valign="top"><b>ReAct Agent Runtime</b><br/><sub>Autonomous agents that plan, read, write, run code, test, and self-verify until the task is done.</sub></td>
+    <td width="33%" valign="top"><b>MCP Protocol</b><br/><sub>Clew can BE an MCP server for other agents and CONSUME external MCP tools.</sub></td>
+    <td width="33%" valign="top"><b>Smart Context</b><br/><sub>Git-aware filtering, relevance ranking, token budget, live project indexing, tombstone compaction.</sub></td>
   </tr>
 </table>
 
@@ -66,346 +67,416 @@
 
 <div align="center">
 
-# 🤔 Why Clew?
+# What Makes Clew Different
 
 </div>
 
-> **Stop juggling terminal tabs, API keys, and slow web UIs.**
-
-| ❌ The daily pain                                     | ✅ How Clew fixes it                                                      |
-| ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| 🌐 Web UIs are slow and clunky                        | **Native desktop app** — instant startup, real-time streaming             |
-| 🔐 Privacy concerns with cloud-only tools             | **Local-first** — your code stays on your machine, zero telemetry         |
-| 🧩 Switching providers means switching tools          | **16 providers in one UI** — Anthropic, OpenAI, Gemini, local models      |
-| 🤖 Manually copying code between AI and your editor   | **Autonomous agents** — they read, write, and run code for you            |
-| 📂 Context management is manual and error-prone       | **Smart context** — intelligent file selection, git-aware, auto-indexed   |
-| 💸 Locked into one provider's ecosystem               | **Multi-provider** — switch models mid-conversation, compare outputs      |
+| Feature | Clew | Cursor / Cline | Windsurf | Claude Desktop |
+|----------|------|----------------|----------|----------------|
+| **Desktop GUI** | Qt/PySide6, offline-capable | Web/Electron | Electron | Electron |
+| **Terminal UI (TUI)** | Textual, full-featured, warm terracotta theme | No | No | No |
+| **Local-first privacy** | Zero telemetry, 100% offline local-model mode | Partial | Partial | Cloud-only |
+| **Autonomous agents** | ReAct loop with structured JSON tool calling | Yes | Yes | Limited |
+| **Provider count** | 16 built-in + user-custom + 200+ via OpenRouter | 5–10 | 35 | 1 (Anthropic) |
+| **Guardian safety** | Rule-based risk assessment + optional LLM review | No | No | No |
+| **MCP server** | Clew as an MCP tool provider for other agents | Plugin | No | No |
+| **Hook system** | Per-tool pre/post hooks (block/modify/allow) | No | No | No |
+| **Checkpoint/rewind** | Auto-snapshot conversations + files, rewind to any point | No | No | No |
+| **Consensus engine** | Run the same task on 2–3 providers in parallel, diff output | No | No | No |
+| **Signed audit trail** | Ed25519 signatures + hash chaining, zero-cloud | No | No | No |
+| **Learning loop** | Auto-detects rollbacks/CI failures → creates learnings | No | No | No |
+| **Web search** | `web_search` + `web_fetch`, read-only `researcher` sub-agent role | Yes | Yes | Yes (preview) |
+| **Cost-aware routing** | Budget-aware provider/model selection | No | No | No |
+| **Smart task decomposition** | Cheap model splits a task into subtasks, routes each to the best-fit model | No | No | No |
+| **Handoff bridge** | Post-task review UI with editable blocks and revision prompts | No | No | No |
+| **Daemon mode** | REST API + SSE, background task queue, inbound messenger control | No | No | No |
+| **Autonomous "Hermes" mode** | Sandboxed workspace + plan-driven autonomy + Telegram control | No | No | No |
+| **Inline section switch** | `{general}`, `{heavy_code}`, `{office}` message prefixes, or `/mode` | No | No | No |
+| **Configurable timeouts** | Per-call `timeout` (1–3600s, default 180s) | No | No | No |
+| **Rust native acceleration** | Sandbox, circuit breaker, compaction — via PyO3 (optional) | No | No | No |
+| **Open source** | MIT | Proprietary | Proprietary | Proprietary |
 
 <br/>
 
 <div align="center">
 
-# ✨ What Makes Clew Different
+# AI Providers — 16 Built-in · 200+ via OpenRouter
 
 </div>
 
-| Feature                            | Clew                                                                 | Cursor / Cline | Windsurf | Claude Desktop |
-| ---------------------------------- | -------------------------------------------------------------------- | -------------- | -------- | -------------- |
-| 🖥️ **Native desktop app**         | **Qt/PySide6-based, fast, offline-capable**                          | Web/Electron   | Electron | Electron       |
-| 💻 **Terminal UI (TUI)**           | **Textual-based, full-featured, terminal-native**                    | No             | No       | No             |
-| 🔒 **Local-first privacy**         | **Zero telemetry, 100% offline mode**                                | Partial        | Partial  | Cloud-only     |
-| 🤖 **Autonomous agents**           | **ReAct loop with JSON tool calling**                                | ✅             | ✅       | Limited        |
-| 🧠 **Provider count**              | **16 native + 200+ via OpenRouter**                                  | 5–10           | 3–5      | 1 (Anthropic)  |
-| 🧩 **MCP Protocol**                | **Built-in MCP client & manager**                                    | Plugin         | No       | ✅             |
-| 🛡️ **Guardian safety system**     | **LLM-based risk assessment with MODIFY/APPROVE/REJECT verdicts**    | No             | No       | No             |
-| ⚡ **Rust native acceleration**    | **Sandbox, circuit breaker, compaction v2 — optional Rust via PyO3** | No             | No       | No             |
-| 📂 **Smart context**               | **Git-aware, relevance-ranked, token-budgeted, live indexing**        | ✅             | ✅       | Limited        |
-| 🤖 **Auto-Router**                 | **Complexity-based provider/model selection with fallback chains**   | No             | No       | No             |
-| 🧩 **Plugin System**               | **Custom providers, API routes, JS/CSS injection**                   | No             | No       | No             |
-| 💬 **Live token tracking**         | **Real-time usage display, per-provider quotas**                     | Basic          | No       | No             |
-| 🎨 **Themes**                      | **Light, Dark, System with ambient neural synapse effects**          | ✅             | ✅       | ✅             |
-| 🔓 **Open source**                 | **MIT**                                                              | Proprietary    | Partial  | Proprietary    |
+> **Any model, same UI. Switch providers mid-conversation, compare outputs, route by cost.**
+
+### Cloud Providers — 16 built-in
+
+| Anthropic | OpenAI | Google Gemini | DeepSeek | Groq | xAI (Grok) |
+|-----------|--------|----------------|----------|------|------------|
+| Mistral | Cerebras | Together | Fireworks | SambaNova | z.ai (GLM) |
+| Nvidia NIM | OpenRouter (200+ models) | | | | |
+
+### Local Models — 100% Private, Zero Network
+
+- **Ollama** — run Llama 3.x, Mistral, Qwen 2.5, DeepSeek Coder locally
+- **LM Studio** — GGUF model server with GPU acceleration
+
+### Custom Providers
+
+Users can register their own providers via:
+- `~/.clew/providers.yaml` — config-file declaration
+- `clew/providers/` — dynamic class loading (plugin-style)
+
+Auto-registers in `ProviderRegistry` and appears in every frontend (GUI, TUI, CLI).
 
 <br/>
 
 <div align="center">
 
-# 🤖 AI Providers — 16 Supported
-
-</div>
-
-> **Switch between cloud and local models seamlessly. Route through OpenRouter for 200+ additional models.**
-
-<div align="center">
-
-### 🏢 Cloud Providers — Through one interface
-
-<table>
-  <tr>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/claude-color.svg" width="44" alt="Anthropic"/><br/><sub><b>Anthropic</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/openai.svg" width="44" alt="OpenAI"/><br/><sub><b>OpenAI</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/gemini-color.svg" width="44" alt="Gemini"/><br/><sub><b>Google Gemini</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/deepseek-color.svg" width="44" alt="DeepSeek"/><br/><sub><b>DeepSeek</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/grok.svg" width="44" alt="xAI"/><br/><sub><b>xAI Grok</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/groq.svg" width="44" alt="Groq"/><br/><sub><b>Groq</b></sub></td>
-  </tr>
-  <tr>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/mistral-color.svg" width="44" alt="Mistral"/><br/><sub><b>Mistral</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/cerebras-color.svg" width="44" alt="Cerebras"/><br/><sub><b>Cerebras</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/together-color.svg" width="44" alt="Together"/><br/><sub><b>Together</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/fireworks-color.svg" width="44" alt="Fireworks"/><br/><sub><b>Fireworks</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/openrouter-color.svg" width="44" alt="OpenRouter"/><br/><sub><b>OpenRouter</b></sub></td>
-    <td align="center" width="100"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/siliconflow-color.svg" width="44" alt="SambaNova"/><br/><sub><b>SambaNova</b></sub></td>
-  </tr>
-  <tr>
-    <td align="center" width="100" colspan="3"><br/><b>z.ai</b><br/><sub>GLM models via z.ai API</sub></td>
-  </tr>
-</table>
-
-<sub>…and 200+ more models via OpenRouter gateway with a single API key</sub>
-
-<br/>
-
-### 🖥️ Local Models — 100% Private, No Internet Required
-
-<table>
-  <tr>
-    <td align="center" width="150"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/ollama-color.svg" width="44" alt="Ollama"/><br/><b>Ollama</b><br/><sub>Run Llama, Mistral, Qwen<br/>locally via Ollama</sub></td>
-    <td align="center" width="150"><img src="https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.91.0/icons/meta-color.svg" width="44" alt="LM Studio"/><br/><b>LM Studio</b><br/><sub>GGUF model server<br/>with GPU acceleration</sub></td>
-  </tr>
-</table>
-
-**Supported local models:**
-- **Llama 3.1 / 3.2** (Meta) — Excellent general-purpose coding and reasoning
-- **Mistral / Mixtral** (Mistral AI) — Fast, efficient, great at following instructions
-- **Qwen 2.5 Coder** (Alibaba) — Outstanding coding performance per parameter size
-- **DeepSeek Coder V2** — Top-tier code generation
-- **Phi-3 / Phi-3.5** (Microsoft) — Incredible speed and logic for small sizes
-
-</div>
-
-<br/>
-
-<div align="center">
-
-# 🚀 Quick Start
+# Quick Start
 
 </div>
 
 **Download** the latest release for your platform from [Releases](https://github.com/ilyaosovskoi/Clew/releases) — `Clew.dmg` (macOS), `Clew-Setup.exe` (Windows), or `Clew.AppImage` (Linux). Requires Python 3.11+.
 
-**Configure** — open Settings, add an API key (Anthropic / OpenAI / Gemini / z.ai) or install [Ollama](https://ollama.ai) / [LM Studio](https://lmstudio.ai) for local models — Clew auto-detects them.
+**Configure** — open Settings, add an API key (Anthropic / OpenAI / Groq / Gemini / DeepSeek / z.ai / etc.), or install [Ollama](https://ollama.ai) / [LM Studio](https://lmstudio.ai) for local models — Clew auto-detects them.
 
-**Open a project** — `File → Open Folder…`, pick a template and a Skill, describe your task in natural language, and watch the agent read, write, and execute code autonomously.
+**Launch**:
+```bash
+clew                          # Desktop GUI (Qt)
+clew_tui                      # Terminal UI (Textual)
+clew-cli run "build an API"   # One-shot headless run
+clew-daemon serve             # REST API + SSE daemon (port 8765)
+clew-acp --mcp-server         # MCP server for other agents
+```
 
 **From source:**
 ```bash
 git clone https://github.com/ilyaosovskoi/Clew.git
-cd Clew && python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,macos]"   # remove macos on Windows/Linux
-clew
+cd Clew                       # main is the current stable line
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .              # core + TUI
+clew                          # Qt GUI (requires PySide6)
+clew_tui                      # TUI (requires textual)
+clew-cli run "prompt"         # CLI (zero extra deps)
+```
+
+> `main` tracks the current stable release. Newer, in-progress work (web UI, expanded benchmarks, upcoming features) lands on separate feature branches before merging back — check [branches](https://github.com/ilyaosovskoi/Clew/branches) if you want to try what's next.
+
+**Install Rust (optional, for native acceleration):**
+```bash
+cd clew-native && maturin develop --release
+# Python fallbacks provide all functionality; Rust adds native performance
+# for the sandbox, circuit breaker, and context compaction.
 ```
 
 <br/>
 
 <div align="center">
 
-# ✨ Key Features
+# Features
 
 </div>
 
-### 🤖 Autonomous ReAct Agent Runtime
+### Autonomous Agent Runtime
 
-Clew's agent system uses the **ReAct** (Reasoning + Acting) pattern to autonomously complete coding tasks:
+The ReAct (Reasoning + Acting) agent loop:
 
-- **Plan → Read → Write → Execute → Observe** loop
-- **JSON tool calling**: `read_file`, `write_file`, `str_replace`, `execute_command`, `search_project`, `git_status`, `git_diff`, `git_stage`, `git_commit`, `get_skill`, `call_mcp_tool`
-- **Sandboxed execution**: Commands run safely with a whitelist (`python`, `git`, `npm`, `pytest`, etc.) — dangerous metacharacters and interpreter escape flags are blocked
-- **Diff review before write**: Agent pauses and asks UI for apply/reject before modifying files
-- **Configurable autonomy levels**: `never_ask`, `new_files_only`, `always_ask`
-- **Live UI trace**: Watch the agent's thoughts and actions in real-time
-- **Self-correction**: If a tool fails, the agent diagnoses and retries
+1. **Plan** — analyze the task, decide what to read, what files are likely relevant
+2. **Read** — open relevant files, gather context
+3. **Write / Edit** — create or modify code using `str_replace`, `write_file`, `apply_diff`
+4. **Run & Verify** — execute tests, check builds, call `self_verify`
+5. **Finalize** — report what changed and what was verified
 
-**Example workflow:**
+**Tool set (30+ tools), including:**
+`read_file`, `write_file`, `str_replace`, `apply_diff`, `execute_command`, `run_code`,
+`git_status`, `git_diff`, `git_stage`, `git_commit`, `search_project`, `grep`, `glob`, `list_files`,
+`web_search`, `web_fetch`, `call_mcp_tool`, `spawn_subagent`, `spawn_multi_agents`, `self_verify`, `final_answer`
+
+**Configurable autonomy:**
+- `always_ask` — confirm every write/execute before it runs
+- `new_files_only` (default) — only new files require confirmation
+- `never_ask` — no interactive confirmation (Guardian's own risk checks still run regardless of this setting)
+
+**Sandboxed execution:**
+- Command allow-list (`python`, `git`, `npm`, `cargo`, `pytest`, etc.)
+- Dangerous shell metacharacters and interpreter-escape flags are blocked
+- Project-level `.clew/commands.json` for explicit, human-approved command allow-listing
+- Per-call `timeout` parameter: 1–3600s (default 180s) — long builds/installs/tests are no longer killed early
+- Optional OS-kernel-level workspace sandbox (Landlock on Linux, Seatbelt on macOS) restricting the agent to a single directory — used by Hermes mode (see below)
+
+### Three Sections (Modes)
+
+| Section | Description | Typical tools | Default max iterations |
+|---------|-------------|---------------|------------------------|
+| **General** (default) | Standard coding, bug fixing, feature implementation | All 30+ tools | 8 |
+| **Heavy Code** | Multi-agent, large codebase refactors | Full set + `spawn_subagent` / `spawn_multi_agents` | 30 |
+| **Office** | `.docx`, `.xlsx`, `.pptx` generation | File + office tools | 8 |
+
+Switch modes inline without leaving the conversation: start a message with `{general}`, `{heavy_code}`, or `{office}`, or use the `/mode office` slash command — the choice persists as the session default until changed again.
+
+### Guardian — Safety Review
+
+Three levels:
+- `off` — disabled (default)
+- `dangerous_only` — high-risk calls get a provider-level review before execution
+- `all` — medium+ risk calls are reviewed
+
+Verdict: **ASSURE** / **MODIFY** / **REJECT** — MODIFY proposes safer alternative arguments. Risk assessment runs identically regardless of the agent's autonomy setting — `never_ask` only skips the interactive confirmation prompt, never the underlying safety check.
+
+### Web Search & Internet Reach
+
+- `web_search(query)` — MCP-first routing (no hardcoded paid API required), with ordered fallback across configured backends
+- `web_fetch(url)` — safe HTML-to-text extraction; rejects non-http(s) URLs and URLs containing secret-shaped or suspiciously long encoded query parameters
+- Read-only `researcher` sub-agent role — can search/fetch but never write, execute, or touch git, so content from an untrusted page can't be used to trigger unrelated actions
+- Fetched content is tagged and compacted the same way large file reads are, so it doesn't permanently bloat the conversation
+
+### Smart Task-Decomposition Router
+
+Beyond simple cost-aware routing, Clew can split a task into subtasks and route each one to whichever configured model fits it best:
+
+1. A cheap model analyzes the incoming task and proposes a subtask breakdown
+2. Each subtask is matched against a per-model specialty description (e.g. "strong at algorithmic reasoning", "best for large-context refactors", "cheap and fast for boilerplate") plus your budget
+3. Subtasks dispatch to sub-agents, each optionally running on a different provider/model, in parallel where independent
+4. Results are merged into one coherent answer
+
+Falls back to single-model routing automatically if decomposition isn't confident or would exceed budget. Override the built-in specialty catalog via `~/.clew/model_capabilities.json`.
+
+### Hook System
+
+Process-level `HookManager` singleton:
+- `pre_tool_use` — BLOCK or MODIFY tool calls before execution
+- `post_tool_use` — audit/log after execution
+- `user_prompt_submit` — BLOCK or MODIFY prompts before they reach the LLM
+
+Write hooks in `~/.clew/hooks/*.py` — auto-loaded at startup. Thread-safe (RLock + snapshot pattern). Config at `~/.clew/hooks.json`.
+
+### Checkpoint / Rewind
+
+- Auto-checkpoint after every agent turn (toggleable)
+- Manual checkpoint via `/checkpoint save [label]`
+- Rewind via `/rewind <n>` restores files from backup and rewinds conversation position
+- File backups in `~/.clew/checkpoints/<session>/backups/<cp-id>/`, SHA-256 checksummed
+- Max 200 checkpoints per session (oldest evicted)
+
+### Multi-Provider Consensus
+
+Run the same task on 2–3 providers in parallel (`ThreadPoolExecutor`) → structured divergence report:
+- Similarity scoring between the approaches
+- Files touched, code volume, and explanation-length differences per provider
+- Configurable: which providers, minimum agreement threshold, per-provider timeout
+
+### Signed Audit Trail
+
+- Ed25519 key pair generated on first use (`~/.clew/audit_key`, `chmod 0600`)
+- Every audit entry's signature covers its payload plus the previous entry's hash
+- Tampering, reordering, or deletion is detectable — verification recomputes the hash chain from scratch
+- Zero-cloud — keys never leave your machine
+
+### Automatic Learning Loop
+
+- Auto-detects: git rollbacks (`reset --hard`), force-pushes, `git revert`, abandoned branches, CI/test failures, and tasks completed without calling `self_verify`
+- On trigger: auto-creates a `learnings/` entry following the project's `Learnings.md` template, scoped per repository
+- Learnings are injected into the system prompt through the same compaction/fragment system as everything else, so they don't permanently bloat the context
+- Dismissed learnings stop being injected
+
+### Layered Memory
+
+- **Task canvas** — a compact, always-fresh graph of the current task's subtasks/steps (status: pending/running/done/failed), rendered live in the TUI sidebar; full detail for any step stays reachable on disk without bloating the prompt
+- **Persona memory** — a small, size-capped, cross-project profile (`~/.clew/persona.md`) of how *you* like to work, distinguished from the per-repository learning loop above; updated incrementally by a cheap model call, editable via `/persona`
+
+### Post-Task Handoff
+
+- Parses agent output into a structured document with typed blocks (text/code/file_diff/todo/note)
+- Each block: stable ID, mutable status (pending/approved/rejected/edited)
+- Mark blocks for revision → compiles your edits into a structured follow-up prompt
+- Markdown export; persists to `~/.clew/handoffs/<id>.json`
+
+### Capability Catalog / Templates
+
+- Task templates across common categories, with placeholder substitution
+- Managed via the `/capability` slash command
+- User-global (`~/.clew/capabilities/`) and project-level (`.clew/capabilities/`) overrides
+
+### Token Efficiency & Budget
+
+- Hard cost caps — stop at a configured dollar amount
+- Per-turn efficiency tracking
+- Cost-aware provider routing (see below) automatically prefers cheaper or local models under budget pressure
+- Aggregate spend reporting (see Team Spend below)
+
+### Cost-Aware Provider Routing
+
+- Re-ranks `AutoRouter`'s picks using budget pressure, per-call USD caps, and provider health
+- Automatically prefers free/local providers (Ollama, LM Studio) as the budget fills up
+
+### Team Spend
+
+- Aggregates token usage into a spend report (total, by user, by provider, by model, by day)
+- Local user identity: `~/.clew/identity.json`
+- Team budget config: `~/.clew/team_budget.json`
+- CSV/JSON export, zero-cloud
+
+### Skills System (`SKILL.md`)
+
+- YAML front-matter: name, description, tags, activation criteria
+- Multi-location: project-level (`.clew/skills/`) and global (`~/.clew/skills/`)
+- Agent requests the full skill text on demand via the `get_skill` tool, so skills don't bloat every prompt
+- Ships with a built-in `web-research` skill
+
+### Context
+
+- Git-aware filtering: ignores `.git/`, `node_modules/`, `__pycache__/`, `venv/`, and other common noise directories
+- Token budget: context is continuously fit to the active model's window
+- Live indexing: file changes are detected and re-indexed as you work
+
+### MCP (Model Context Protocol) Support
+
+- Clew as **client**: connect any MCP server's tools — they appear directly in the agent's tool catalog
+- Clew as **server**: other agents can call Clew as an MCP provider (JSON-RPC 2.0 over stdio)
+  - Read-only mode (default): `clew-acp --mcp-server`
+  - Write mode (additional tools): `clew-acp --mcp-server --mcp-server-writes`
+  - Restrict the exposed tool set with `--tools`
+
+### Terminal UI (TUI)
+
+- Warm terracotta palette with a soft pink accent
+- Animated "thinking" indicator with rotating status verbs
+- Distinct styling for shell/execution output vs. permission prompts vs. plain chat
+- Compact status bar: model, tokens, section, elapsed time
+- Live `/theme dark|light` switching
+- Live task-canvas sidebar (see Layered Memory above)
+
+### Daemon Mode — Background Execution
+
+- `clew-daemon serve` — REST API + SSE event stream (default port 8765)
+- `clew-daemon task "prompt" --notify telegram` — one-shot run with outbound notification
+- Bearer-token authentication, configurable queue limits
+- Outbound Telegram/Discord/Slack notifications on task progress/completion
+
+### Autonomous "Hermes" Mode
+
+For hands-off, remote-controlled operation:
+```bash
+clew hermes --workspace ./my-project --telegram-token <token> --allow <chat_id>
 ```
-User: "Add error handling to api.py"
-Agent:
-  1. 🧠 Plan: Read api.py, identify try-catch gaps, add handlers
-  2. 📖 read_file(api.py) → analyzes current error handling
-  3. ✍️ str_replace() → injects try-except blocks
-  4. ▶️ execute_command("python -m pytest tests/test_api.py") → verifies
-  5. ✅ Final answer: "Added error handling with 3 try-except blocks, all tests pass"
+Bundles, in one command:
+- An OS-kernel-level sandbox restricting the agent to the given workspace directory
+- `never_ask` autonomy with plan-driven execution (a plan is still produced for each task, it just isn't blocked on a GUI click)
+- An inbound Telegram listener (mandatory allow-list — no wildcard "anyone can message it" mode) that turns incoming messages into queued tasks
+- A `STOP` keyword that cancels the currently running task
+- Outbound progress/completion messages back to the same chat
+- Every action taken from a remote message is tagged in the signed audit trail
+
+Guardian's safety checks are never bypassed by this mode — the workspace sandbox is the outer, kernel-enforced backstop; Guardian's own risk assessment is the inner one, and it runs unconditionally.
+
+### Remote Control via Messengers
+
+Beyond Hermes mode, the outbound notifier alone can be used to keep tabs on background/daemon tasks over Telegram, Discord, or Slack without adopting full autonomous mode.
+
+### CLI — Headless
+
+- `clew-cli run "prompt"` — non-interactive, no GUI dependencies
+- `clew-cli chat "what does prime.py do?"` — single question
+- `clew-cli heavy-code "refactor across 5 files..."` — multi-agent mode
+- `clew-cli office "generate a quarterly report from data.xlsx"` — office-document mode
+- Pipeable output: `clew-cli run "what is this project?" > spec.txt`
+
+<br/>
+
+<div align="center">
+
+# Current Status
+
+</div>
+
+### Completed
+
+- [x] 16 built-in providers + user-configured custom providers + OpenRouter (200+ models)
+- [x] Four entry points sharing one agent runtime: GUI (Qt), TUI (Textual), CLI, daemon
+- [x] 30+ agent tools: read/write/str_replace/apply_diff, execute, git, web, MCP
+- [x] Guardian safety review (`dangerous_only`, `all` levels)
+- [x] MCP client + MCP server modes
+- [x] Multi-provider "Second Opinion" before commit
+- [x] Multi-provider consensus engine (parallel run + divergence report)
+- [x] Signed, hash-chained audit trail (Ed25519, zero-cloud)
+- [x] Web search + web fetch, read-only `researcher` sub-agent role
+- [x] Automatic learning loop (rollback/CI-failure detection → per-repo learnings)
+- [x] Post-task handoff bridge
+- [x] Hook system (pre/post tool use, prompt submit)
+- [x] Checkpoint / rewind
+- [x] GitHub integration
+- [x] Capability catalog / templates
+- [x] Cost-aware provider routing + team spend reporting
+- [x] Smart task-decomposition router (subtask-level model routing)
+- [x] Layered memory: live task canvas + cross-session persona profile
+- [x] Autonomous "Hermes" mode (sandboxed workspace + inbound messenger control)
+- [x] Inline section switching (`{general}` / `{heavy_code}` / `{office}` / `/mode`)
+- [x] Configurable per-call timeouts (1–3600s, default 180s)
+- [x] TUI visual overhaul
+- [x] ~800+ automated tests
+
+### Planned
+
+- [ ] Browser-based web UI (localhost) as an alternative to the Qt desktop GUI
+- [ ] Expanded internal benchmark suite for regression tracking across releases
+- [ ] Monetization features (building on the existing cost-routing and team-spend groundwork) — deferred until the current feature set stabilizes and the user base grows
+
+<br/>
+
+<div align="center">
+
+# Architecture
+
+</div>
+
+```
+clew/                       Core package
+├── agent_runtime/          ReAct agent loop: ToolEngine, prompt building, section parser
+├── agent/                  Guardian, sandbox, checkpoints, task canvas, persona memory
+├── providers/              16 built-in providers + registry + auto-router
+├── web_bridge/             Qt <-> agent runtime bridge (@Slot methods)
+└── tests/                  Test suite
+
+clew_tui/                   Terminal UI (separate package, shares the agent runtime via a bridge)
+├── widgets/                ChatLog, InputBox, StatusBar, ThinkingIndicator, ToolBlock,
+│                           TaskCanvasView, Approval/Verification modals
+└── styles_dark.tcss / styles_light.tcss
+
+clew-native/                Optional Rust acceleration (PyO3): sandbox, circuit breaker, compaction
 ```
 
-### 🧩 Model Context Protocol (MCP) Support
+<br/>
 
-Built-in **MCP manager** lets Clew connect to external tools and knowledge bases:
+# Technology Stack
 
-- **Multi-server management**: Configure multiple MCP servers in `~/.clew/mcp.json`
-- **Unified tool catalog**: MCP tools appear alongside built-in tools in the agent's system prompt
-- **Meta-tool routing**: Agent calls `call_mcp_tool(server, tool, args)` — the manager routes to the right MCP client
-- **Secure**: Explicit user approval for sensitive operations
+- **Python 3.11+**
+- **Qt / PySide6** — desktop GUI
+- **Textual** — terminal UI
+- **SQLite** — chat history, settings, memory, session state
+- **Rust (PyO3)** — optional native acceleration for sandboxing, circuit breaking, and context compaction
+- **Git** (subprocess) — status, diff, stage, commit, branch — no external dependency
+- **MCP (Model Context Protocol)** — client and server support
 
-### 🧠 Multi-Provider Auto-Router
-
-Automatically selects the best provider/model for each task based on complexity analysis, cost constraints, and speed requirements:
-
-- **Task complexity classification**: Trivial → Simple → Moderate → Complex → Expert
-- **Model tier catalog**: Maps each provider and model to a cost/speed/capability tier
-- **Fallback chains**: If the primary provider fails, the router automatically falls back to the next best option
-- **Covers all 16 registered providers** — no provider is left out of auto-routing
-
-### 📂 Smart Context Management
-
-Clew intelligently selects which files to include in the AI's context:
-
-- **Git-aware filtering**: Ignores `.git/`, `node_modules/`, `__pycache__/`, build artifacts, and 15+ other common directories
-- **Relevance ranking**: Uses heuristics and information-density weights per file extension
-- **Token budget**: Automatically fits context within the model's limit
-- **Live indexing**: File changes are detected and re-indexed; agent-created files are tracked automatically
-
-### 🎨 Premium UI with Dark Mode
-
-Beautiful, distraction-free interface built with an embedded HTML5 frontend (QWebEngineView):
-
-- **Themes**: Light, Dark, System (follows OS)
-- **Ambient synapse effects**: Neural pathway animations (toggleable)
-- **Integrated Code Viewer**: Right-panel file explorer with syntax highlighting, file search, and change watching
-- **High-DPI support**: Retina / 4K displays
-- **Native OS integration**: Transparent titlebar on macOS, polished typography (Inter + JetBrains Mono)
-
-### 💬 Live Token Tracking & Quota System
-
-- **Per-message tracking**: Input tokens, output tokens, total cost
-- **Daily quota tracking**: Per-section daily limits with persistent on-disk storage
-- **Cost estimation**: Know the cost before sending (based on provider pricing)
-- **Context window visualization**: Bar chart shows how much context is used
-
-### 🔧 Plugin System
-
-Extend Clew without modifying the source code:
-
-- **Auto-discovery**: Drop `.py` files in `~/.clew/plugins/` — loaded at startup
-- **Register custom providers**: Add your own AI provider backends
-- **Custom API routes**: Expose new HTTP endpoints from the local API server
-- **Frontend injection**: Inject custom JavaScript and CSS into the HTML UI
-
-### 📋 Skill System (SKILL.md)
-
-Reusable instruction packages that guide the agent's behavior:
-
-- **YAML frontmatter**: Skill name, description, tags, and activation criteria
-- **Multi-location loading**: Project-level (`.clew/skills/`) and user-level (`~/.clew/skills/`)
-- **Skill catalog**: Descriptions injected into the system prompt; agent requests full skill text via `get_skill` tool
-
-### 🗂️ Git Integration
-
-Built-in Git service — no external tool needed:
-
-- **Agent tools**: `git_status`, `git_diff`, `git_stage`, `git_commit`
-- **Branch management** and **commit history**
-- **Diff viewer**: Unified diffs with hunk-level accept/reject
-
-### 💾 Cross-Chat Memory
-
-- **Structured metadata**: Each session records project root, provider, files touched, chat ID, and tags
-- **Search** prior sessions by keyword, file path, project root, or tag
-- **Context brief**: Compact summary of relevant prior sessions injected into system prompts
-
-### 🔍 LSP Integration
-
-Language Server Protocol client for Python via `python-lsp-server` / `jedi`:
-
-- **Autocomplete**, **hover**, **go-to-definition**, **diagnostics**, **signature help**
-- Non-blocking: all operations run in a dedicated QThread
-
-### 🔄 Auto-Updater
-
-- **GitHub Releases API**: Checks for newer versions on startup (no external dependency)
-- **Configurable**: Can be disabled or overridden with a custom repo URL
-
-### 🛡️ Security & Privacy
-
-- **Local-first**: Your code never leaves your machine unless you use a cloud API
-- **Zero telemetry**: No tracking, no analytics, no crash reports
-- **Sandboxed execution**: Command whitelist, dangerous metacharacters and interpreter escape flags blocked
-- **Path sandboxing**: Code Viewer restricts file access to the project root
+**Zero required runtime dependencies beyond Python 3.11+.** A Rust toolchain is optional, for native-performance builds only.
 
 <br/>
 
-<div align="center">
+## Contributing
 
-# 🗺️ Roadmap
+- **Fork** the repository
+- **Clone**: `git clone https://github.com/ilyaosovskoi/Clew.git`
+- **Branch**: `git checkout -b feature/amazing-feature`
+- **Commit**: `git commit -m "Add amazing thing"`
+- **Push**: `git push origin feature/amazing-feature`
+- **Pull request** — see [Issues](https://github.com/ilyaosovskoi/Clew/issues) for open items
 
-</div>
+**Author:** Ilya Osovskoi
 
-- [x] **Multi-provider support** (15 native providers + OpenRouter gateway)
-- [x] **ReAct agent runtime** with JSON tool calling
-- [x] **MCP protocol integration** (multi-server manager)
-- [x] **Smart context management** with git-aware filtering
-- [x] **Live token tracking** and cost estimation
-- [x] **Git integration** (status, diff, stage, commit)
-- [x] **Diff service** with hunk-level accept/reject
-- [x] **Plugin system** (custom providers, routes, JS/CSS injection)
-- [x] **Skill system** (SKILL.md format with catalog)
-- [x] **Cross-chat memory** with structured metadata
-- [x] **Auto-Router** (complexity-based provider selection)
-- [x] **LSP client** (Python autocomplete, hover, diagnostics)
-- [x] **Auto-updater** (GitHub Releases integration)
-- [x] **Daily quota system** per section
-- [ ] **Multi-agent "Heavy Code" mode** — spawn multiple agents for complex refactors
-- [ ] **Voice mode** — speak your tasks, hear code explanations
-- [ ] **Web UI** — browser-based version for remote access
-- [ ] **Team collaboration** — shared sessions, real-time co-editing
+**Contact & links:**
+- GitHub: [github.com/ilyaosovskoi/Clew](https://github.com/ilyaosovskoi/Clew)
+- Issues: [github.com/ilyaosovskoi/Clew/issues](https://github.com/ilyaosovskoi/Clew/issues)
+- Releases: [github.com/ilyaosovskoi/Clew/releases](https://github.com/ilyaosovskoi/Clew/releases)
 
-<br/>
+## License
 
-<div align="center">
-
-# 🛠️ Tech Stack
-
-</div>
-
-- **Language**: Python 3.11 / 3.12
-- **UI Framework**: PySide6 (Qt 6.6+) — native desktop with QWebEngineView (HTML5 frontend)
-- **Frontend**: HTML5, JavaScript, CSS (embedded web UI in `clew/web/`)
-- **Agent Runtime**: Custom ReAct loop with JSON-based tool calling (QThread for non-blocking)
-- **Auto-Router**: Complexity analysis + model tier catalog + fallback chains
-- **Context Protocol**: MCP (Model Context Protocol) client & multi-server manager
-- **Providers**: 15 native via OpenAI-compatible API or raw urllib (Anthropic, Gemini, z.ai)
-- **LSP**: python-lsp-server / jedi for Python language features
-- **Git**: Pure subprocess — no gitpython dependency
-- **Database**: SQLite for chat history, settings, memory
-- **Plugin System**: Dynamic module loading from `~/.clew/plugins/`
-- **Platforms**: macOS (M-series + Intel), Windows 10+, Linux (Qt6-supported distros)
-
-**Zero external runtime dependencies for core features** — no Docker, no Redis, no Node.js. Just Python + Qt.
-
-<br/>
-
-<div align="center">
-
-# 🤝 Contributing
-
-</div>
-
-We welcome contributions! Here's how to get started:
-
-1. **Fork** the repository on GitHub
-2. **Clone**: `git clone https://github.com/YOUR_USERNAME/Clew.git`
-3. **Branch**: `git checkout -b feature/amazing-feature`
-4. **Commit**: `git commit -m 'Add amazing feature'`
-5. **Push**: `git push origin feature/amazing-feature`
-6. **Open a Pull Request** on the main repository
-
-**Ideas:** add a provider in `clew/providers/`, improve the agent in `agent_runtime.py`, build a plugin in `~/.clew/plugins/`, create a SKILL.md, fix a bug on [Issues](https://github.com/ilyaosovskoi/Clew/issues).
-
-<br/>
-
-<div align="center">
-
-# 📧 Support
-
-</div>
-
-- 🐙 **GitHub**: [github.com/ilyaosovskoi/Clew](https://github.com/ilyaosovskoi/Clew)
-- 🐛 **Issues**: [Report a bug or request a feature](https://github.com/ilyaosovskoi/Clew/issues)
-- 📥 **Releases**: [Download the latest version](https://github.com/ilyaosovskoi/Clew/releases)
-
-<br/>
-
-<div align="center">
-
-## 📄 License
-
-</div>
-
-MIT License — see [LICENSE](LICENSE) for details.
+MIT — free to use in any project.
 
 ---
-
-<div align="center">
-
-<sub>Clew v1.1.0 · Python ≥3.11 · Qt 6.6+ · MIT License</sub>
-
-</div>

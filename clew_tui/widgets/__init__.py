@@ -6,6 +6,7 @@ from .command_palette import CommandPalette
 from .command_suggestions import CommandSuggestions
 from .input_box import InputBox
 from .status_bar import StatusBar
+from .task_canvas_view import TaskCanvasView
 from .thinking import ThinkingIndicator
 from .tool_block import ToolBlock
 
@@ -17,6 +18,7 @@ __all__ = [
     "GuardianModal",
     "InputBox",
     "StatusBar",
+    "TaskCanvasView",
     "ThinkingIndicator",
     "ToolBlock",
 ]

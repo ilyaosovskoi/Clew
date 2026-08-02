@@ -4313,6 +4313,102 @@ class ClewBridge(QObject):
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    # ── G19a — Task canvas ─────────────────────────────────────────
+
+    @Slot(result='QVariantMap')
+    def get_task_canvas(self):
+        """Return the current task canvas state (nodes, counts, total).
+
+        The Qt GUI can render this as a live tree widget — at minimum
+        this slot exposes the state so the GUI *can* render it later
+        without needing another round-trip design (per G19 prompt).
+        """
+        try:
+            from ..agent.task_canvas import get_task_canvas
+            return {"ok": True, "canvas": get_task_canvas().to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(result='QVariantMap')
+    def reset_task_canvas(self):
+        """Drop every node from the task canvas."""
+        try:
+            from ..agent.task_canvas import get_task_canvas
+            get_task_canvas().reset()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── G19b — Persona memory ──────────────────────────────────────
+
+    @Slot(result='QVariantMap')
+    def get_persona(self):
+        """Return the current persona.md content + path + char counts."""
+        try:
+            from ..agent.persona_memory import get_persona_memory
+            return {"ok": True, **get_persona_memory().to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(str, result='QVariantMap')
+    def set_persona(self, content):
+        """Overwrite the persona.md content."""
+        try:
+            from ..agent.persona_memory import get_persona_memory
+            get_persona_memory().set(content)
+            return {"ok": True, **get_persona_memory().to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(result='QVariantMap')
+    def reset_persona(self):
+        """Delete the persona file."""
+        try:
+            from ..agent.persona_memory import get_persona_memory
+            get_persona_memory().reset()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot('QVariantMap', result='QVariantMap')
+    def update_persona_from_session(self, digest_dict):
+        """Run the cheap maintenance LLM call to update the persona."""
+        try:
+            from ..agent.persona_memory import (
+                get_persona_memory,
+                PersonaDigest,
+            )
+            digest = PersonaDigest()
+            if digest_dict:
+                for k, v in digest_dict.items():
+                    if hasattr(digest, k) and isinstance(v, (list, str)):
+                        setattr(digest, k, list(v) if isinstance(v, list) else v)
+            return get_persona_memory().update_from_session(digest)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── G20c — Router mode ─────────────────────────────────────────
+
+    @Slot(str, result='QVariantMap')
+    def set_router_mode(self, mode):
+        """Set AutoRouter mode: 'single' (default) or 'decompose'."""
+        try:
+            from ..auto_router import get_auto_router
+            ar = get_auto_router()
+            ar.set_mode(mode)
+            return {"ok": True, "mode": ar.get_mode()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @Slot(result='QVariantMap')
+    def get_router_mode(self):
+        """Return the current AutoRouter mode."""
+        try:
+            from ..auto_router import get_auto_router
+            return {"ok": True, "mode": get_auto_router().get_mode()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     # ── Cleanup ───────────────────────────────────────────────────
 
     def cleanup(self) -> None:

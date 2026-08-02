@@ -432,6 +432,56 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Revoke a previously approved <workspace>/.clew/commands.json.")
     rp.add_argument("--workspace", default=None, help="Project root (default: cwd).")
 
+    # G21b — Hermes mode: one-shot autonomous-operation preset.
+    hermes = sub.add_parser(
+        "hermes",
+        help=(
+            "Autonomous Hermes mode — sandbox + never_ask autonomy + "
+            "inbound Telegram listener + outbound notifier, in one shot."
+        ),
+    )
+    hermes.add_argument(
+        "--workspace", required=True,
+        help="Workspace directory the agent can read/write (sandboxed to this).",
+    )
+    hermes.add_argument(
+        "--telegram-token", required=True,
+        help="Telegram bot token from BotFather (inbound listener).",
+    )
+    hermes.add_argument(
+        "--allow", action="append", required=True,
+        help=(
+            "Allowed Telegram chat ID (the chat the bot accepts messages "
+            "from). Repeatable: --allow 123 --allow 456. MANDATORY — no "
+            "wildcard 'accept anyone' mode is supported (G21 §21a)."
+        ),
+    )
+    hermes.add_argument(
+        "--notify", default=None,
+        help=(
+            "Outbound notifier to enable (telegram/discord/slack). "
+            "Default: telegram (uses the same token)."
+        ),
+    )
+    hermes.add_argument(
+        "--no-sandbox", action="store_true",
+        help=(
+            "Skip apply_sandbox (NOT recommended — the OS-level sandbox "
+            "is the outer backstop that prevents the agent from touching "
+            "files outside --workspace)."
+        ),
+    )
+    hermes.add_argument(
+        "--no-plan", action="store_true",
+        help="Skip the planning step for each incoming task (faster, less structured).",
+    )
+    hermes.add_argument(
+        "--max-iterations", type=int, default=15,
+        help="Max agent loop iterations per incoming task (default: 15).",
+    )
+    hermes.add_argument("--verbose", "-v", action="store_true",
+                        help="Verbose logging on stderr.")
+
     return p
 
 
@@ -455,7 +505,303 @@ def main(argv: Optional[list] = None) -> int:
         return _approve_project(args)
     if args.command == "revoke-project":
         return _revoke_project(args)
+    if args.command == "hermes":
+        return _hermes(args)
     return _run_task(args)
+
+
+# ── G21b — Hermes mode ─────────────────────────────────────────────────
+def _hermes(args) -> int:
+    """Autonomous Hermes mode preset.
+
+    Bundles, in one shot (per G21 §21b):
+      - ``apply_sandbox(profile="workspace", workspace_root=<dir>)``
+      - ``autonomy="never_ask"`` with ``plan_mode=True``
+      - inbound listener enabled with the given allow-list
+      - outbound notifier enabled so the user gets progress/completion
+        back in the same chat
+      - every task that originated from an inbound message is tagged
+        as such in the activity log / G16 audit trail
+
+    Guardian is NOT weakened — ``never_ask`` only means "don't block
+    waiting for a human click", not "skip Guardian risk assessment"
+    (G21 §21c — verified by ``test_g21_hermes_guardian.py``).
+    """
+    import os
+    import sys as _sys
+    import time as _time
+
+    workspace = os.path.abspath(args.workspace)
+    if not os.path.isdir(workspace):
+        print(f"[hermes] workspace not found: {workspace}", file=_sys.stderr)
+        return 1
+
+    # 1) Apply the OS-level workspace sandbox (Landlock on Linux,
+    #    Seatbelt on macOS). This is the OUTER backstop — irreversible,
+    #    kernel-enforced, can't be bypassed by the agent. Per G21 §21b
+    #    and §21c ("The OS-level workspace sandbox is the outer
+    #    backstop; Guardian is the inner one.").
+    if not args.no_sandbox:
+        try:
+            from clew.agent.sandbox import apply_sandbox, SandboxError
+            apply_sandbox(profile="workspace", workspace_root=workspace)
+            print(f"[hermes] sandbox applied: workspace={workspace}", file=_sys.stderr)
+        except Exception as e:
+            print(
+                f"[hermes] WARNING: sandbox apply failed ({e}) — "
+                "continuing WITHOUT OS-level sandbox. This is unsafe; "
+                "consider --no-sandbox only for testing.",
+                file=_sys.stderr,
+            )
+
+    # 2) Build the AgentRuntime with autonomy="never_ask" + plan_mode.
+    #    Per G21 §21b: "the agent still produces a plan for each
+    #    incoming task, but doesn't block on a GUI click to approve it".
+    try:
+        registry = _build_registry(args)
+    except Exception as e:
+        print(f"[hermes] failed to build provider registry: {e}", file=_sys.stderr)
+        return 1
+
+    from clew.agent_runtime.runtime import AgentRuntime
+    runtime = AgentRuntime(
+        registry=registry,
+        workspace=workspace,
+        max_iterations=args.max_iterations,
+        enable_planning=not args.no_plan,
+        on_event=_make_hermes_event_sink(),
+        section="general",
+    )
+    # autonomy="never_ask" — the agent doesn't block waiting for a
+    # human click to approve tool calls. Guardian still runs (G21 §21c).
+    runtime.set_autonomy("never_ask")
+    # plan_mode stays enabled (default) — the agent still produces a
+    # plan for each task, but doesn't block on approval. Per G21 §21b.
+    print(
+        f"[hermes] runtime ready — autonomy=never_ask, plan_mode=True, "
+        f"max_iterations={args.max_iterations}",
+        file=_sys.stderr,
+    )
+
+    # 3) Enable the outbound notifier so the user gets progress /
+    #    completion messages back in the same chat. Per G21 §21b.
+    notifier_backend = args.notify or "telegram"
+    try:
+        _enable_notifier(notifier_backend, args)
+        print(f"[hermes] outbound notifier enabled: {notifier_backend}", file=_sys.stderr)
+    except Exception as e:
+        print(
+            f"[hermes] WARNING: notifier setup failed ({e}) — "
+            "continuing without outbound notifications.",
+            file=_sys.stderr,
+        )
+
+    # 4) Build the inbound listener and wire it to the daemon's
+    #    TaskQueue so accepted messages become tasks. Per G21 §21a:
+    #    "On an accepted message: call daemon.py's existing
+    #    TaskQueue.submit(prompt, workspace=...)".
+    from clew.inbound_listener import (
+        InboundListenerConfig,
+        make_inbound_listener,
+        make_daemon_callback,
+        make_daemon_stop_callback,
+    )
+    from clew.activity_log import get_activity_log
+
+    # Build a minimal in-process TaskQueue that runs submitted tasks
+    # through our Hermes runtime. We don't use the full HTTP daemon
+    # because Hermes mode is single-user, single-workspace.
+    hermes_queue = _HermesTaskQueue(runtime=runtime, workspace=workspace)
+    hermes_queue.start_workers()
+
+    on_message = make_daemon_callback(
+        hermes_queue,
+        workspace=workspace,
+        activity_log=get_activity_log(),
+    )
+    on_stop = make_daemon_stop_callback(
+        hermes_queue,
+        activity_log=get_activity_log(),
+    )
+
+    config = InboundListenerConfig(
+        backend="telegram",
+        telegram_token=args.telegram_token,
+        allowed_chat_ids=set(args.allow),
+        workspace=workspace,
+    )
+    errors = config.validate()
+    if errors:
+        print(f"[hermes] invalid config: {'; '.join(errors)}", file=_sys.stderr)
+        return 1
+
+    listener = make_inbound_listener(config, on_message, on_stop=on_stop)
+
+    # 5) Start the listener and run until interrupted.
+    listener.start()
+    print(
+        f"[hermes] listening for messages from Telegram chats: {sorted(args.allow)}",
+        file=_sys.stderr,
+    )
+    print(
+        "[hermes] press Ctrl+C to stop. Reply STOP to the bot to cancel "
+        "the currently running task.",
+        file=_sys.stderr,
+    )
+
+    try:
+        while listener.is_running():
+            _time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("\n[hermes] shutting down...", file=_sys.stderr)
+    finally:
+        listener.stop(timeout=5.0)
+        hermes_queue.shutdown()
+
+    return 0
+
+
+def _make_hermes_event_sink():
+    """Build an event sink that prints Hermes-mode events to stderr."""
+    def _sink(kind: str, data: dict) -> None:
+        # Minimal output — just enough so the user sees progress in
+        # the terminal running `clew hermes`. The outbound notifier
+        # handles the richer chat-side notifications.
+        if kind == "tool_result":
+            tool = data.get("tool", "?")
+            print(f"[hermes] tool {tool} done", file=__import__("sys").stderr)
+        elif kind == "thought":
+            pass  # too noisy for stderr
+        elif kind == "task_done":
+            print(f"[hermes] task done", file=__import__("sys").stderr)
+    return _sink
+
+
+def _enable_notifier(backend: str, args) -> None:
+    """Configure the outbound notifier for Hermes mode."""
+    from clew.notifier import get_notifier, NotificationEvent, EventKind
+
+    notifier = get_notifier()
+    if backend == "telegram":
+        # Reuse the inbound token for outbound (same bot).
+        notifier.add_backend("telegram", {
+            "bot_token": args.telegram_token,
+            "chat_id": args.allow[0] if args.allow else "",
+            "enabled": True,
+            "events": ["task_done", "task_failed"],
+        })
+    elif backend in ("discord", "slack"):
+        # Need a webhook URL — the user must have configured this
+        # separately via /notify. We just enable the backend.
+        notifier.add_backend(backend, {"enabled": True, "events": ["task_done", "task_failed"]})
+    else:
+        raise ValueError(f"unknown notifier backend: {backend}")
+
+
+class _HermesTaskQueue:
+    """Minimal in-process task queue for Hermes mode.
+
+    Implements just enough of the ``clew/daemon.py`` TaskQueue API
+    (``submit``, ``cancel_task``, ``list_tasks``, ``start_workers``,
+    ``shutdown``) so the inbound-listener callbacks can talk to it
+    without pulling in the full HTTP daemon. Hermes mode is single-
+    user, single-workspace — no HTTP server needed.
+    """
+
+    def __init__(self, runtime, workspace: str) -> None:
+        self._runtime = runtime
+        self._workspace = workspace
+        self._tasks: dict = {}  # task_id -> {status, prompt, result, ...}
+        self._lock = __import__("threading").RLock()
+        self._current_task_id: str = ""
+        self._stop_event = __import__("threading").Event()
+        self._worker_thread = None
+        self._counter = 0
+
+    def submit(self, prompt: str, workspace: str = "") -> str:
+        import threading as _th
+        import uuid as _uuid
+        task_id = "hermes_" + _uuid.uuid4().hex[:10]
+        with self._lock:
+            self._tasks[task_id] = {
+                "task_id": task_id,
+                "status": "pending",
+                "prompt": prompt,
+                "workspace": workspace or self._workspace,
+                "result": "",
+                "error": "",
+                "created_at": __import__("time").time(),
+            }
+            self._counter += 1
+        return task_id
+
+    def cancel_task(self, task_id: str) -> bool:
+        with self._lock:
+            t = self._tasks.get(task_id)
+            if not t:
+                return False
+            if t["status"] == "running":
+                t["status"] = "cancelled"
+                # Signal the worker to stop via the runtime's cancel check.
+                self._runtime.request_stop()
+                return True
+            t["status"] = "cancelled"
+            return True
+
+    def list_tasks(self, limit: int = 50) -> list:
+        with self._lock:
+            return list(self._tasks.values())[-limit:]
+
+    def start_workers(self) -> None:
+        import threading as _th
+        self._worker_thread = _th.Thread(
+            target=self._worker_loop, name="hermes-worker", daemon=True,
+        )
+        self._worker_thread.start()
+
+    def shutdown(self) -> None:
+        self._stop_event.set()
+        if self._worker_thread and self._worker_thread.is_alive():
+            self._worker_thread.join(timeout=2.0)
+
+    def _worker_loop(self) -> None:
+        import time as _time
+        while not self._stop_event.is_set():
+            task = None
+            with self._lock:
+                # Find the next pending task.
+                for tid, t in self._tasks.items():
+                    if t["status"] == "pending":
+                        task = t
+                        self._current_task_id = tid
+                        break
+            if task is None:
+                _time.sleep(0.5)
+                continue
+            task["status"] = "running"
+            try:
+                # Run the task through the Hermes runtime.
+                result = self._runtime.run(task["prompt"])
+                task["result"] = result
+                task["status"] = "done"
+            except Exception as e:
+                task["error"] = str(e)
+                task["status"] = "failed"
+            finally:
+                with self._lock:
+                    self._current_task_id = ""
+            # Notify outbound.
+            try:
+                from clew.notifier import get_notifier, NotificationEvent, EventKind
+                event_kind = EventKind.DONE if task["status"] == "done" else EventKind.ERROR
+                get_notifier().notify_async(NotificationEvent(
+                    event=event_kind,
+                    title=f"Hermes task {task['status']}",
+                    message=task.get("result", "")[:500] or task.get("error", "")[:500],
+                    data={"task_id": task["task_id"]},
+                ))
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

@@ -1993,3 +1993,126 @@ class ClewBridge:
             return {"ok": True, "configured": bool(config.get("auth_token"))}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    # ── G19a — Task canvas ──────────────────────────────────────────
+
+    def get_task_canvas(self) -> Dict[str, Any]:
+        """Return the current task canvas state (nodes, counts, total).
+
+        Used by the TUI's TaskCanvasView widget and by the GUI's
+        ``get_task_canvas`` slot. Returns ``{"ok": True, "canvas": {...}}``
+        on success. The canvas is a process-wide singleton, so this
+        always reflects the latest state from any thread.
+        """
+        try:
+            from clew.agent.task_canvas import get_task_canvas
+            return {"ok": True, "canvas": get_task_canvas().to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def reset_task_canvas(self) -> Dict[str, Any]:
+        """Drop every node from the task canvas. Used at the start of a
+        new top-level task so the previous turn's canvas doesn't leak."""
+        try:
+            from clew.agent.task_canvas import get_task_canvas
+            get_task_canvas().reset()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── G19b — Persona memory ───────────────────────────────────────
+
+    def get_persona(self) -> Dict[str, Any]:
+        """Return the current persona.md content + path + char counts.
+
+        The ``content`` field is the raw Markdown text — the TUI/GUI
+        renders it as-is (no parsing, no transformation).
+        """
+        try:
+            from clew.agent.persona_memory import get_persona_memory
+            return {"ok": True, **get_persona_memory().to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_persona(self, content: str) -> Dict[str, Any]:
+        """Overwrite the persona.md content. Used by ``/persona edit``.
+
+        Enforces the hard char cap (2200) — anything larger is
+        truncated with a note. Returns the new char count.
+        """
+        try:
+            from clew.agent.persona_memory import get_persona_memory
+            get_persona_memory().set(content)
+            return {"ok": True, **get_persona_memory().to_dict()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def reset_persona(self) -> Dict[str, Any]:
+        """Delete the persona file. Used by ``/persona reset``."""
+        try:
+            from clew.agent.persona_memory import get_persona_memory
+            get_persona_memory().reset()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def update_persona_from_session(
+        self, digest_dict: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Run the cheap maintenance LLM call to update the persona.
+
+        ``digest_dict`` is an optional dict with keys matching
+        :class:`PersonaDigest` fields (summary, accepted_actions, ...).
+        If omitted, an empty digest is used (the LLM will likely return
+        the persona unchanged).
+
+        Best-effort: any failure leaves the existing persona on disk
+        untouched. Returns ``{"ok": True, "before_chars": N,
+        "after_chars": M, ...}`` on success or ``{"ok": False,
+        "error": str(e)}`` on failure.
+        """
+        try:
+            from clew.agent.persona_memory import (
+                get_persona_memory,
+                PersonaDigest,
+            )
+
+            digest = PersonaDigest()
+            if digest_dict:
+                for k, v in digest_dict.items():
+                    if hasattr(digest, k) and isinstance(v, list):
+                        setattr(digest, k, list(v))
+                    elif hasattr(digest, k) and isinstance(v, str):
+                        setattr(digest, k, v)
+            result = get_persona_memory().update_from_session(digest)
+            return result
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── G20c — Decompose mode ───────────────────────────────────────
+
+    def set_router_mode(self, mode: str) -> Dict[str, Any]:
+        """Set the AutoRouter mode: ``"single"`` (default) or
+        ``"decompose"`` (G20 task-decomposition router).
+
+        ``"decompose"`` mode routes the prompt through the
+        :class:`TaskDecompositionRouter` which breaks the task into
+        subtasks, picks the best model for each, dispatches them as
+        subagents (in parallel where possible), and merges the results.
+        """
+        try:
+            from clew.auto_router import get_auto_router
+            ar = get_auto_router()
+            ar.set_mode(mode)
+            return {"ok": True, "mode": ar.get_mode()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get_router_mode(self) -> Dict[str, Any]:
+        """Return the current AutoRouter mode (``"single"`` or
+        ``"decompose"``)."""
+        try:
+            from clew.auto_router import get_auto_router
+            return {"ok": True, "mode": get_auto_router().get_mode()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}

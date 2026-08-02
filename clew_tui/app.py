@@ -24,6 +24,7 @@ from .widgets.command_palette import CommandPalette, CommandEntry, SECTIONS, BUI
 from .widgets.command_suggestions import CommandSuggestions, SuggestionItem
 from .widgets.input_box import InputBox
 from .widgets.status_bar import StatusBar
+from .widgets.task_canvas_view import TaskCanvasView
 from .widgets.verification_modal import VerificationModal
 
 
@@ -52,6 +53,7 @@ class ClewTUIApp(App):
         yield StatusBar(id="status")
         yield ChatLog(id="chat")
         yield CommandSuggestions(id="suggestions")
+        yield TaskCanvasView(id="task_canvas")
         yield InputBox(id="input")
 
     def on_mount(self) -> None:
@@ -332,6 +334,15 @@ class ClewTUIApp(App):
         # v2.1.0 (Loop 3): /theme slash command for theme switching
         elif cmd == "/theme":
             self._exec_theme(arg)
+        # G19a: task canvas view
+        elif cmd == "/canvas":
+            self._exec_canvas(arg)
+        # G19b: persona memory
+        elif cmd == "/persona":
+            self._exec_persona(arg)
+        # G20c: router mode
+        elif cmd == "/router-mode":
+            self._exec_router_mode(arg)
         else:
             self.query_one(ChatLog).add_system(
                 f"Unknown command: {cmd}. Type /help for available commands."
@@ -2408,6 +2419,11 @@ class ClewTUIApp(App):
             self.bridge.status(), state=state, section=self.bridge.section,
             guardian=guardian_level,
         )
+        # G19a: keep the TaskCanvasView sidebar widget in sync with
+        # the canvas state on every status refresh. Cheap (one stat()
+        # + a tiny markup build) and means the user always sees the
+        # live task graph without needing to run /canvas manually.
+        self._refresh_task_canvas_view()
 
     # ------------------------------------------------------------------ actions
     def action_interrupt(self) -> None:
@@ -3092,4 +3108,212 @@ class ClewTUIApp(App):
             else:
                 chat.add_error(f"Error: {r.get('error', 'unknown')}")
 
+        self.query_one(InputBox).focus()
+
+    # ── G19a: /canvas ───────────────────────────────────────────────
+
+    def _exec_canvas(self, arg: str) -> None:
+        """Show / reset the task canvas.
+
+        Usage:
+            /canvas           — show the current canvas (nodes + counts)
+            /canvas reset     — drop every node (start a fresh canvas)
+        """
+        chat = self.query_one(ChatLog)
+        arg = (arg or "").strip()
+        if arg == "reset":
+            r = self.bridge.reset_task_canvas()
+            if r.get("ok"):
+                chat.add_system("[green]Task canvas reset.[/green]")
+                self._refresh_task_canvas_view()
+            else:
+                chat.add_error(f"Reset failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        r = self.bridge.get_task_canvas()
+        if not r.get("ok"):
+            chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        canvas = r.get("canvas", {})
+        nodes = canvas.get("nodes", [])
+        counts = canvas.get("counts", {})
+        total = canvas.get("total", 0)
+        lines = ["[b]Task Canvas (G19a)[/b]", ""]
+        if not nodes:
+            lines.append("  [dim](empty — no nodes yet)[/dim]")
+        else:
+            lines.append(
+                f"  Total: {total} nodes — "
+                f"[green]{counts.get('done', 0)} done[/green], "
+                f"[#d77757]{counts.get('running', 0)} running[/#d77757], "
+                f"[yellow]{counts.get('pending', 0)} pending[/yellow], "
+                f"[red]{counts.get('failed', 0)} failed[/red]"
+            )
+            lines.append("")
+            for n in nodes:
+                status = n.get("status", "?")
+                color = {
+                    "done": "green",
+                    "running": "#d77757",
+                    "pending": "yellow",
+                    "failed": "red",
+                }.get(status, "white")
+                label = n.get("label", "?")
+                if len(label) > 60:
+                    label = label[:59] + "…"
+                line = f"  [{color}][{status}][/{color}] {label}"
+                if n.get("model"):
+                    line += f" [dim]-> {n['model']}[/dim]"
+                if n.get("depends_on"):
+                    line += f" [dim](depends: {', '.join(n['depends_on'])})[/dim]"
+                lines.append(line)
+        chat.add_system("\n".join(lines))
+        self._refresh_task_canvas_view()
+        self.query_one(InputBox).focus()
+
+    def _refresh_task_canvas_view(self) -> None:
+        """Refresh the sidebar TaskCanvasView widget, if present."""
+        try:
+            view = self.query_one(TaskCanvasView)
+            view.refresh_view()
+        except Exception:
+            pass  # widget not mounted yet — fine
+
+    # ── G19b: /persona ──────────────────────────────────────────────
+
+    def _exec_persona(self, arg: str) -> None:
+        """Show / edit / reset the per-user persona profile.
+
+        Usage:
+            /persona             — show current persona.md content
+            /persona edit        — open $EDITOR on the persona file
+            /persona reset       — delete the persona file
+            /persona update      — run the maintenance LLM call now
+                                   (uses the cheap tier; pass an optional
+                                   summary string as the second arg)
+        """
+        chat = self.query_one(ChatLog)
+        arg = (arg or "").strip()
+        if arg == "reset":
+            r = self.bridge.reset_persona()
+            if r.get("ok"):
+                chat.add_system("[green]Persona file deleted.[/green]")
+            else:
+                chat.add_error(f"Reset failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        if arg == "edit":
+            import subprocess
+            import os
+            editor = os.environ.get("EDITOR", "nano")
+            path = ""
+            r = self.bridge.get_persona()
+            if r.get("ok"):
+                path = r.get("path", "")
+            if not path:
+                chat.add_error("No persona path available")
+                self.query_one(InputBox).focus()
+                return
+            chat.add_system(f"Opening [cyan]{path}[/cyan] in {editor}…")
+            try:
+                subprocess.run([editor, path], check=False)
+                chat.add_system("[green]Persona file edited.[/green]")
+            except Exception as e:
+                chat.add_error(f"Editor failed: {e}")
+            self.query_one(InputBox).focus()
+            return
+        if arg.startswith("update"):
+            summary = ""
+            parts = arg.split(None, 1)
+            if len(parts) > 1:
+                summary = parts[1]
+            chat.add_system("Running persona maintenance LLM call (cheap tier)…")
+            digest_dict = {"summary": summary} if summary else None
+            r = self.bridge.update_persona_from_session(digest_dict)
+            if r.get("ok"):
+                if r.get("unchanged"):
+                    chat.add_system(
+                        f"[green]Persona unchanged[/green] "
+                        f"({r.get('after_chars', 0)} chars). "
+                        "LLM decided no updates needed."
+                    )
+                else:
+                    chat.add_system(
+                        f"[green]Persona updated[/green]: "
+                        f"{r.get('before_chars', 0)} → {r.get('after_chars', 0)} chars "
+                        f"(provider: {r.get('provider_id', '?')}/{r.get('model', '?')})"
+                    )
+            else:
+                chat.add_error(f"Update failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        # Default: show
+        r = self.bridge.get_persona()
+        if not r.get("ok"):
+            chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        content = r.get("content", "")
+        path = r.get("path", "")
+        chars = r.get("chars", 0)
+        soft_cap = r.get("soft_cap", 2000)
+        lines = [
+            "[b]Persona Memory (G19b)[/b]",
+            "",
+            f"  Path:  [cyan]{path}[/cyan]",
+            f"  Size:  {chars} / {soft_cap} chars"
+            + (" [yellow](over soft cap)[/yellow]" if chars > soft_cap else ""),
+            "",
+        ]
+        if content:
+            lines.append("[b]Content:[/b]")
+            lines.append(content)
+        else:
+            lines.append("[dim](empty — no persona file yet)[/dim]")
+            lines.append("")
+            lines.append("Use [cyan]/persona update[/cyan] to run the maintenance LLM call")
+            lines.append("or [cyan]/persona edit[/cyan] to write one by hand.")
+        chat.add_system("\n".join(lines))
+        self.query_one(InputBox).focus()
+
+    # ── G20c: /router-mode ──────────────────────────────────────────
+
+    def _exec_router_mode(self, arg: str) -> None:
+        """Show / set the AutoRouter mode (single | decompose).
+
+        Usage:
+            /router-mode              — show current mode
+            /router-mode single       — single-model routing (default)
+            /router-mode decompose    — task-decomposition router (G20)
+        """
+        chat = self.query_one(ChatLog)
+        arg = (arg or "").strip()
+        if arg in ("single", "decompose"):
+            r = self.bridge.set_router_mode(arg)
+            if r.get("ok"):
+                chat.add_system(
+                    f"[green]Router mode set to:[/green] [cyan]{r.get('mode')}[/cyan]"
+                )
+            else:
+                chat.add_error(f"Failed: {r.get('error', 'unknown')}")
+            self.query_one(InputBox).focus()
+            return
+        r = self.bridge.get_router_mode()
+        if r.get("ok"):
+            mode = r.get("mode", "single")
+            lines = [
+                "[b]AutoRouter Mode (G20c)[/b]",
+                "",
+                f"  Current: [cyan]{mode}[/cyan]",
+                "",
+                "  Modes:",
+                "    [cyan]single[/cyan]     — one model for the whole task (default)",
+                "    [cyan]decompose[/cyan]  — break into subtasks, route each to the best model",
+                "",
+                "  Use [cyan]/router-mode single[/cyan] or [cyan]/router-mode decompose[/cyan] to switch.",
+            ]
+            chat.add_system("\n".join(lines))
+        else:
+            chat.add_error(f"Failed: {r.get('error', 'unknown')}")
         self.query_one(InputBox).focus()

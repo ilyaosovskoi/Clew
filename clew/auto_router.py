@@ -8,13 +8,25 @@ Implements fallback chains for resilience.
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import re
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+# G20c — router modes. Default is "single" (today's AutoRouter.route()
+# behavior). "decompose" routes through TaskDecompositionRouter (G20)
+# which breaks the task into subtasks and routes each one separately.
+MODE_SINGLE = "single"
+MODE_DECOMPOSE = "decompose"
+ALL_MODES: Tuple[str, ...] = (MODE_SINGLE, MODE_DECOMPOSE)
 
 
 class TaskComplexity(str, Enum):
@@ -36,6 +48,15 @@ class ModelTier:
     cost_per_1k_out: float
     speed: str  # "fast" | "medium" | "slow"
     capabilities: List[str]
+    # G20a — free-text specialty description used by the task-decomposition
+    # router to match subtask needs against a tier's strengths. Examples:
+    #   "strong at algorithmic/mathematical reasoning"
+    #   "best for large-context codebase navigation and refactors"
+    #   "cheap and fast for boilerplate/CRUD/formatting"
+    #   "strong at frontend/visual/design-oriented tasks"
+    #   "best for long structured document generation"
+    # Empty string is allowed for backward compat (overrides can fill it in).
+    specialty: str = ""
 
 
 # Default tier catalog — users can override via settings
@@ -47,44 +68,211 @@ class ModelTier:
 # Z.ai would never get auto-routed to it, defeating the whole point of
 # "don't make the person think about it". Every registered provider now
 # has an entry somewhere in the tier catalog.
+#
+# G20a: every entry now carries a `specialty` free-text description.
+# These are intentionally short and concrete ("strong at X") so the
+# task-decomposition router can match subtask needs against them with a
+# simple keyword/semantic match. Override via ~/.clew/model_capabilities.json.
 DEFAULT_TIERS = {
     TaskComplexity.TRIVIAL: [
-        ModelTier("groq", "llama-3.1-8b-instant", 8192, 0.00005, 0.00008, "fast", ["chat"]),
-        ModelTier("cerebras", "llama-4-scout-17b-16e-instruct", 8192, 0.0, 0.0, "fast", ["chat"]),
-        ModelTier("ollama", "llama3.3", 4096, 0.0, 0.0, "medium", ["chat"]),
-        ModelTier("lmstudio", "", 4096, 0.0, 0.0, "medium", ["chat"]),
-        ModelTier("openrouter", "deepseek-chat", 8192, 0.00014, 0.00028, "fast", ["chat"]),
+        ModelTier("groq", "llama-3.1-8b-instant", 8192, 0.00005, 0.00008, "fast", ["chat"],
+                 "cheap and fast for boilerplate/CRUD/formatting"),
+        ModelTier("cerebras", "llama-4-scout-17b-16e-instruct", 8192, 0.0, 0.0, "fast", ["chat"],
+                 "free-tier inference for short tasks"),
+        ModelTier("ollama", "llama3.3", 4096, 0.0, 0.0, "medium", ["chat"],
+                 "local, free, private — for offline/short tasks"),
+        ModelTier("lmstudio", "", 4096, 0.0, 0.0, "medium", ["chat"],
+                 "local, free, private — for offline/short tasks"),
+        ModelTier("openrouter", "deepseek-chat", 8192, 0.00014, 0.00028, "fast", ["chat"],
+                 "cheap and fast for boilerplate/CRUD/formatting"),
     ],
     TaskComplexity.SIMPLE: [
-        ModelTier("groq", "llama-3.3-70b-versatile", 16384, 0.00059, 0.00079, "fast", ["chat", "tool_calling"]),
-        ModelTier("deepseek", "deepseek-v4-pro", 16384, 0.00027, 0.0011, "fast", ["chat", "tool_calling"]),
-        ModelTier("zai", "glm-5.1", 16384, 0.0002, 0.0008, "fast", ["chat", "tool_calling"]),
-        ModelTier("sambanova", "Meta-Llama-4-Maverick-17B-128E-Instruct", 16384, 0.0, 0.0, "fast", ["chat", "tool_calling"]),
-        ModelTier("openrouter", "deepseek-chat", 16384, 0.00014, 0.00028, "fast", ["chat", "tool_calling"]),
-        ModelTier("openai", "gpt-4o-mini", 16384, 0.00015, 0.0006, "fast", ["chat", "tool_calling"]),
-        ModelTier("together", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", 16384, 0.0002, 0.0006, "fast", ["chat", "tool_calling"]),
-        ModelTier("fireworks", "accounts/fireworks/models/llama4-maverick-instruct-basic", 16384, 0.00022, 0.00088, "fast", ["chat", "tool_calling"]),
-        ModelTier("mistral", "mistral-large-latest", 16384, 0.002, 0.006, "medium", ["chat", "tool_calling"]),
+        ModelTier("groq", "llama-3.3-70b-versatile", 16384, 0.00059, 0.00079, "fast", ["chat", "tool_calling"],
+                 "cheap and fast for boilerplate/CRUD/formatting"),
+        ModelTier("deepseek", "deepseek-v4-pro", 16384, 0.00027, 0.0011, "fast", ["chat", "tool_calling"],
+                 "strong at algorithmic/mathematical reasoning"),
+        ModelTier("zai", "glm-5.1", 16384, 0.0002, 0.0008, "fast", ["chat", "tool_calling"],
+                 "balanced for general coding and tool use"),
+        ModelTier("sambanova", "Meta-Llama-4-Maverick-17B-128E-Instruct", 16384, 0.0, 0.0, "fast", ["chat", "tool_calling"],
+                 "free-tier fast inference for general coding"),
+        ModelTier("openrouter", "deepseek-chat", 16384, 0.00014, 0.00028, "fast", ["chat", "tool_calling"],
+                 "cheap and fast for boilerplate/CRUD/formatting"),
+        ModelTier("openai", "gpt-4o-mini", 16384, 0.00015, 0.0006, "fast", ["chat", "tool_calling"],
+                 "cheap and fast for boilerplate/CRUD/formatting"),
+        ModelTier("together", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", 16384, 0.0002, 0.0006, "fast", ["chat", "tool_calling"],
+                 "open-source fast inference for general coding"),
+        ModelTier("fireworks", "accounts/fireworks/models/llama4-maverick-instruct-basic", 16384, 0.00022, 0.00088, "fast", ["chat", "tool_calling"],
+                 "open-source fast inference for general coding"),
+        ModelTier("mistral", "mistral-large-latest", 16384, 0.002, 0.006, "medium", ["chat", "tool_calling"],
+                 "balanced for general coding and tool use"),
     ],
     TaskComplexity.MODERATE: [
-        ModelTier("anthropic", "claude-3-5-sonnet-20241022", 8192, 0.003, 0.015, "medium", ["chat", "tool_calling", "vision"]),
-        ModelTier("openai", "gpt-4o", 8192, 0.0025, 0.01, "medium", ["chat", "tool_calling", "vision"]),
-        ModelTier("gemini", "gemini-3.1-pro", 8192, 0.00125, 0.005, "medium", ["chat", "tool_calling", "vision"]),
-        ModelTier("xai", "grok-4.3", 8192, 0.002, 0.01, "medium", ["chat", "tool_calling"]),
-        ModelTier("openrouter", "anthropic/claude-3.5-sonnet", 8192, 0.003, 0.015, "medium", ["chat", "tool_calling"]),
+        ModelTier("anthropic", "claude-3-5-sonnet-20241022", 8192, 0.003, 0.015, "medium", ["chat", "tool_calling", "vision"],
+                 "strong at frontend/visual/design-oriented tasks and large-context codebase navigation"),
+        ModelTier("openai", "gpt-4o", 8192, 0.0025, 0.01, "medium", ["chat", "tool_calling", "vision"],
+                 "balanced for general coding, vision, and tool use"),
+        ModelTier("gemini", "gemini-3.1-pro", 8192, 0.00125, 0.005, "medium", ["chat", "tool_calling", "vision"],
+                 "strong at long structured document generation and multimodal tasks"),
+        ModelTier("xai", "grok-4.3", 8192, 0.002, 0.01, "medium", ["chat", "tool_calling"],
+                 "balanced for general coding and tool use"),
+        ModelTier("openrouter", "anthropic/claude-3.5-sonnet", 8192, 0.003, 0.015, "medium", ["chat", "tool_calling"],
+                 "strong at frontend/visual/design-oriented tasks and large-context codebase navigation"),
     ],
     TaskComplexity.COMPLEX: [
-        ModelTier("anthropic", "claude-sonnet-4-20250514", 16384, 0.003, 0.015, "medium", ["chat", "tool_calling", "vision"]),
-        ModelTier("openai", "gpt-4o", 16384, 0.0025, 0.01, "medium", ["chat", "tool_calling", "vision"]),
-        ModelTier("gemini", "gemini-3.1-pro", 16384, 0.00125, 0.005, "medium", ["chat", "tool_calling", "vision"]),
-        ModelTier("anthropic", "claude-3-5-sonnet-20241022", 16384, 0.003, 0.015, "medium", ["chat", "tool_calling"]),
+        ModelTier("anthropic", "claude-sonnet-4-20250514", 16384, 0.003, 0.015, "medium", ["chat", "tool_calling", "vision"],
+                 "best for large-context codebase navigation and refactors"),
+        ModelTier("openai", "gpt-4o", 16384, 0.0025, 0.01, "medium", ["chat", "tool_calling", "vision"],
+                 "balanced for general coding, vision, and tool use"),
+        ModelTier("gemini", "gemini-3.1-pro", 16384, 0.00125, 0.005, "medium", ["chat", "tool_calling", "vision"],
+                 "strong at long structured document generation and multimodal tasks"),
+        ModelTier("anthropic", "claude-3-5-sonnet-20241022", 16384, 0.003, 0.015, "medium", ["chat", "tool_calling"],
+                 "strong at frontend/visual/design-oriented tasks and large-context codebase navigation"),
     ],
     TaskComplexity.EXPERT: [
-        ModelTier("anthropic", "claude-opus-4-20250514", 16384, 0.015, 0.075, "slow", ["chat", "tool_calling", "vision"]),
-        ModelTier("openai", "o1", 32768, 0.01, 0.04, "slow", ["chat"]),
-        ModelTier("anthropic", "claude-3-opus-20240229", 4096, 0.015, 0.075, "slow", ["chat", "tool_calling"]),
+        ModelTier("anthropic", "claude-opus-4-20250514", 16384, 0.015, 0.075, "slow", ["chat", "tool_calling", "vision"],
+                 "strong at algorithmic/mathematical reasoning and complex multi-step planning"),
+        ModelTier("openai", "o1", 32768, 0.01, 0.04, "slow", ["chat"],
+                 "strong at algorithmic/mathematical reasoning and complex multi-step planning"),
+        ModelTier("anthropic", "claude-3-opus-20240229", 4096, 0.015, 0.075, "slow", ["chat", "tool_calling"],
+                 "strong at algorithmic/mathematical reasoning and complex multi-step planning"),
     ],
 }
+
+
+# ── G20a — ~/.clew/model_capabilities.json override loader ────────────
+#
+# Mirrors the capability_catalog.py pattern: user can override or add
+# entries without touching the shipped catalog. The override file is a
+# JSON object keyed by provider_id, with each value being a list of
+# {model, specialty, ...} dicts that REPLACE the corresponding entries
+# in DEFAULT_TIERS (matched by (provider_id, model) tuple). Entries
+# that don't exist in DEFAULT_TIERS are added to the SIMPLE tier.
+#
+# Example ~/.clew/model_capabilities.json:
+#   {
+#     "openai": [
+#       {"model": "gpt-4o", "specialty": "best for vision-heavy tasks"}
+#     ],
+#     "ollama": [
+#       {"model": "qwen2.5-coder:32b", "specialty": "strong at code generation", "max_tokens": 16384}
+#     ]
+#   }
+# NOTE: the path is computed lazily via _override_path() rather than
+# captured at module import time, so tests that monkeypatch
+# ``Path.home()`` (via the standard ``_isolated_home`` fixture) actually
+# see the redirected path. Capturing at import time would freeze the
+# real home dir and break test isolation.
+_OVERRIDE_FILENAME = "model_capabilities.json"
+
+
+def _override_path() -> Path:
+    """Return the override path (recomputed each call for testability)."""
+    return Path.home() / ".clew" / _OVERRIDE_FILENAME
+
+
+def _load_overrides() -> Dict[str, Any]:
+    """Load the user's model capability overrides.
+
+    Returns an empty dict on any error (missing file, invalid JSON,
+    permission denied). The dict shape is {provider_id: [{model, ...}]}.
+    """
+    try:
+        path = _override_path()
+        if not path.exists():
+            return {}
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except Exception as e:
+        logger.debug("[auto_router] override load failed: %s", e)
+        return {}
+
+
+def _apply_overrides(
+    tiers: Dict[TaskComplexity, List[ModelTier]],
+    overrides: Dict[str, Any],
+) -> Dict[TaskComplexity, List[ModelTier]]:
+    """Apply user overrides on top of the built-in DEFAULT_TIERS.
+
+    Overrides are matched by (provider_id, model) tuple. If the tuple
+    exists in DEFAULT_TIERS, the override's non-None fields REPLACE the
+    built-in fields (specialty, max_tokens, cost_per_1k_in, cost_per_1k_out,
+    speed, capabilities). The override applies to EVERY matching entry
+    (some (provider, model) tuples appear in multiple complexity tiers —
+    e.g. openai/gpt-4o is in both MODERATE and COMPLEX). If the tuple
+    doesn't exist, the entry is appended to the SIMPLE tier.
+
+    This function is pure (no I/O) and does NOT mutate the input — it
+    returns a new dict so the original DEFAULT_TIERS is never modified.
+    """
+    if not overrides:
+        return tiers
+    # Deep-ish copy: new dict, new lists, but the ModelTier dataclass
+    # instances themselves are replaced (not mutated) on override.
+    new_tiers: Dict[TaskComplexity, List[ModelTier]] = {
+        complexity: list(tier_list) for complexity, tier_list in tiers.items()
+    }
+    # Track which (provider_id, model) tuples we've already added via an
+    # override (so we don't add the same new entry multiple times if the
+    # user lists it twice). Existing entries in DEFAULT_TIERS are matched
+    # by iterating (a (provider_id, model) tuple can legitimately appear
+    # in multiple complexity tiers — we want the override to apply to
+    # ALL of them, not just the first one we find).
+    seen_new_keys: set = set()
+    for provider_id, entries in overrides.items():
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict) or "model" not in entry:
+                continue
+            model = entry["model"]
+            key = (provider_id, model)
+            # Try to update every existing entry with this (provider, model).
+            # If none exist, append to SIMPLE (once per key).
+            matched = False
+            for complexity, tier_list in new_tiers.items():
+                for i, t in enumerate(tier_list):
+                    if t.provider_id == provider_id and t.model == model:
+                        # Replace fields only when the override explicitly sets them.
+                        new_tier = ModelTier(
+                            provider_id=t.provider_id,
+                            model=t.model,
+                            max_tokens=int(entry.get("max_tokens", t.max_tokens)),
+                            cost_per_1k_in=float(entry.get("cost_per_1k_in", t.cost_per_1k_in)),
+                            cost_per_1k_out=float(entry.get("cost_per_1k_out", t.cost_per_1k_out)),
+                            speed=str(entry.get("speed", t.speed)),
+                            capabilities=list(entry.get("capabilities", t.capabilities)),
+                            specialty=str(entry.get("specialty", t.specialty)),
+                        )
+                        tier_list[i] = new_tier
+                        matched = True
+            if not matched and key not in seen_new_keys:
+                # New entry — append to SIMPLE. Use sensible defaults
+                # for any missing fields so the user only has to specify
+                # what they care about.
+                new_tier = ModelTier(
+                    provider_id=provider_id,
+                    model=model,
+                    max_tokens=int(entry.get("max_tokens", 8192)),
+                    cost_per_1k_in=float(entry.get("cost_per_1k_in", 0.0)),
+                    cost_per_1k_out=float(entry.get("cost_per_1k_out", 0.0)),
+                    speed=str(entry.get("speed", "medium")),
+                    capabilities=list(entry.get("capabilities", ["chat", "tool_calling"])),
+                    specialty=str(entry.get("specialty", "")),
+                )
+                new_tiers[TaskComplexity.SIMPLE].append(new_tier)
+                seen_new_keys.add(key)
+    return new_tiers
+
+
+def _build_default_tiers_with_overrides() -> Dict[TaskComplexity, List[ModelTier]]:
+    """Build the effective tier catalog: DEFAULT_TIERS + user overrides."""
+    overrides = _load_overrides()
+    if not overrides:
+        return DEFAULT_TIERS
+    return _apply_overrides(DEFAULT_TIERS, overrides)
 
 
 class AutoRouter:
@@ -100,13 +288,21 @@ class AutoRouter:
     """
 
     def __init__(self):
-        self._tiers = DEFAULT_TIERS
+        # G20a — load user overrides (~/.clew/model_capabilities.json)
+        # on top of DEFAULT_TIERS. Reloaded on every __init__ so changes
+        # to the override file take effect on the next router instance
+        # (cheap: one stat() + one json.load if the file exists).
+        self._tiers = _build_default_tiers_with_overrides()
         self._per_request_budget: Optional[float] = None  # max $ per request
         self._force_provider: Optional[str] = None        # user override
         self._force_model: Optional[str] = None
         self._provider_available: Dict[str, bool] = {}    # track which providers work
         self._provider_available_ts: Dict[str, float] = {}  # timestamp of last mark
         self._provider_cache_ttl: float = 300.0  # 5 minutes (M-AUTO-2)
+        # G20c — router mode. Default "single" preserves today's behavior.
+        # "decompose" routes through TaskDecompositionRouter (G20) which
+        # breaks the task into subtasks and routes each one separately.
+        self._mode: str = MODE_SINGLE
 
     # ── Configuration ──────────────────────────────────────────────
 
@@ -127,6 +323,30 @@ class AutoRouter:
         import time as _time
         self._provider_available[provider_id] = available
         self._provider_available_ts[provider_id] = _time.time()
+
+    # G20c — router mode (single | decompose)
+    def set_mode(self, mode: str) -> None:
+        """Set the router mode.
+
+        - ``"single"`` (default): today's AutoRouter.route() — one model
+          for the whole task.
+        - ``"decompose"`` (G20): route through TaskDecompositionRouter
+          which breaks the task into subtasks, picks the best model for
+          each, dispatches them as subagents (in parallel where
+          possible), and merges the results.
+
+        Any unknown value is normalised to ``"single"`` so a typo can't
+        leave the router in an undefined state.
+        """
+        if mode not in ALL_MODES:
+            logger.warning("[auto_router] unknown mode %r, falling back to 'single'", mode)
+            self._mode = MODE_SINGLE
+        else:
+            self._mode = mode
+
+    def get_mode(self) -> str:
+        """Return the current router mode."""
+        return self._mode
 
     # ── Routing ────────────────────────────────────────────────────
 
@@ -354,6 +574,9 @@ class AutoRouter:
                 f"({primary.speed}, ~${cost_est:.4f} est.)"
             ),
             "speed": primary.speed,
+            # G20a — include the specialty so the task-decomposition
+            # router (and the UI) can show why this model was picked.
+            "specialty": primary.specialty,
         }
 
     def _estimate_cost(self, tier: ModelTier, prompt: str) -> float:
@@ -375,8 +598,50 @@ class AutoRouter:
                     "speed": t.speed,
                     "est_cost_in": t.cost_per_1k_in,
                     "est_cost_out": t.cost_per_1k_out,
+                    # G20a — surface the specialty in the UI so users
+                    # can see WHY each model is in each tier.
+                    "specialty": t.specialty,
                 }
                 for t in tiers
             ]
             for complexity, tiers in self._tiers.items()
         }
+
+    # G20a — expose all tiers (with overrides applied) for the
+    # task-decomposition router to score against. Returns a flat list
+    # of (complexity, tier) tuples so the caller can iterate without
+    # caring about the complexity-bucketed structure.
+    def all_tiers(self) -> List[Tuple[TaskComplexity, "ModelTier"]]:
+        """Return every tier across all complexity levels (with overrides applied)."""
+        out: List[Tuple[TaskComplexity, ModelTier]] = []
+        for complexity, tier_list in self._tiers.items():
+            for t in tier_list:
+                out.append((complexity, t))
+        return out
+
+
+# ── Module-level singleton (lazy) — mirrors get_activity_log() ────────
+# Pattern from cost_router.py: lazy-init under a Lock so the first
+# caller pays the init cost (one stat + one json.load if the override
+# file exists), every subsequent caller gets the same instance. Tests
+# can call reset_auto_router_for_test() to get a fresh one.
+_AUTO_ROUTER: Optional["AutoRouter"] = None
+_AUTO_ROUTER_LOCK = threading.Lock()
+
+
+def get_auto_router() -> "AutoRouter":
+    """Return the process-wide AutoRouter singleton."""
+    global _AUTO_ROUTER
+    if _AUTO_ROUTER is None:
+        with _AUTO_ROUTER_LOCK:
+            if _AUTO_ROUTER is None:
+                _AUTO_ROUTER = AutoRouter()
+    return _AUTO_ROUTER
+
+
+def reset_auto_router_for_test() -> "AutoRouter":
+    """Replace the singleton with a fresh AutoRouter. Test-only."""
+    global _AUTO_ROUTER
+    with _AUTO_ROUTER_LOCK:
+        _AUTO_ROUTER = AutoRouter()
+    return _AUTO_ROUTER
