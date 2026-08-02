@@ -77,6 +77,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-qt>=4.2",
+    "pytest-timeout>=2.3",
     "black>=24.0",
     "mypy>=1.10",
     "py2app>=0.28",   # for .dmg builds on macOS
