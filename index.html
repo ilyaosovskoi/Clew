@@ -4,145 +4,167 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clew — Native AI Coding IDE</title>
-<meta name="description" content="Clew is an open-source native AI coding IDE. 16 providers, ReAct agents, TUI + GUI, MCP support, zero telemetry. Runs on macOS, Windows, and Linux.">
+<meta name="description" content="Clew is an open-source native AI coding IDE. 16 providers, ReAct agents, GUI + TUI + CLI + daemon, MCP support, signed audit trail, zero telemetry. Runs on macOS, Windows, and Linux.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#09090b;
-  --bg-alt:#0f0f12;
-  --surface:#141418;
-  --surface-2:#1c1c22;
-  --surface-3:#232329;
-  --border:#27272a;
-  --border-soft:#1f1f23;
-  --text:#f4f4f5;
-  --text-dim:#a1a1aa;
-  --text-dimmer:#63636e;
-  --accent:#6366f1;
-  --accent-hi:#818cf8;
-  --accent-soft:rgba(99,102,241,.10);
-  --accent-soft-border:rgba(99,102,241,.25);
-  --green:#34d399;
-  --green-soft:rgba(52,211,153,.10);
-  --amber:#fbbf24;
+  --bg:#05070a;
+  --bg-alt:#080a0f;
+  --surface:#0d1119;
+  --surface-2:#121722;
+  --surface-3:#182030;
+  --border:#1d2431;
+  --border-soft:#161c27;
+  --text:#eef1f6;
+  --text-dim:#8d97a8;
+  --text-dimmer:#525d6d;
+  --blue:#3d7eff;
+  --blue-hi:#6b9bff;
+  --blue-soft:rgba(61,126,255,.10);
+  --blue-soft-border:rgba(61,126,255,.28);
+  --amber:#ff9640;
+  --amber-soft:rgba(255,150,64,.12);
+  --amber-soft-border:rgba(255,150,64,.30);
+  --green:#2fd699;
+  --green-soft:rgba(47,214,153,.10);
+  --red:#ff5c5c;
   --radius:10px;
-  --radius-lg:14px;
-  --max-w:1160px;
+  --radius-lg:16px;
+  --max-w:1180px;
+  --display:'Space Grotesk',var(--body);
   --body:'Inter',system-ui,-apple-system,sans-serif;
   --mono:'JetBrains Mono',ui-monospace,monospace;
 }
 html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
-body{font-family:var(--body);color:var(--text-dim);background:var(--bg);line-height:1.65;overflow-x:hidden}
-a{color:var(--accent);text-decoration:none;transition:color .2s ease}
-a:hover{color:var(--accent-hi)}
+body{font-family:var(--body);color:var(--text-dim);background:var(--bg);line-height:1.65;overflow-x:hidden;position:relative}
+body::before{content:"";position:fixed;inset:0;z-index:-2;background:
+  radial-gradient(ellipse 900px 500px at 15% -8%,rgba(61,126,255,.10),transparent 60%),
+  radial-gradient(ellipse 700px 450px at 105% 10%,rgba(255,150,64,.07),transparent 60%);
+  pointer-events:none}
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.35;
+  background-image:linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px);
+  background-size:64px 64px}
+a{color:var(--blue-hi);text-decoration:none;transition:color .2s ease}
+a:hover{color:var(--text)}
 img{max-width:100%;display:block}
 .container{max-width:var(--max-w);margin:0 auto;padding:0 24px}
-h1,h2,h3,h4{font-family:var(--body);color:var(--text);letter-spacing:-.02em;font-weight:700}
+h1,h2,h3,h4{font-family:var(--display);color:var(--text);letter-spacing:-.01em;font-weight:600}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
 
 /* ---- NAV ---- */
-nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(9,9,11,.80);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid transparent;transition:border-color .2s ease}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(5,7,10,.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-bottom:1px solid transparent;transition:border-color .2s ease}
 nav.scrolled{border-bottom-color:var(--border)}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;height:60px}
-.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;color:var(--text)}
-.logo-mark{width:28px;height:28px;background:var(--accent);border-radius:7px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:.85rem;font-family:var(--body)}
-.nav-links{display:flex;align-items:center;gap:28px;list-style:none}
-.nav-links a{color:var(--text-dimmer);font-size:.85rem;font-weight:500;transition:color .2s}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:1.05rem;color:var(--text);font-family:var(--display)}
+.logo-mark{width:26px;height:26px;background:linear-gradient(135deg,var(--blue),var(--amber));border-radius:7px;display:grid;place-items:center;color:#050608;font-weight:700;font-size:.82rem;font-family:var(--mono)}
+.nav-links{display:flex;align-items:center;gap:26px;list-style:none}
+.nav-links a{color:var(--text-dimmer);font-size:.82rem;font-weight:500;font-family:var(--mono);letter-spacing:.01em}
 .nav-links a:hover{color:var(--text)}
-.nav-cta{background:var(--accent);color:#fff!important;padding:7px 16px;border-radius:8px;font-weight:600;font-size:.82rem;transition:background .2s}
-.nav-cta:hover{background:var(--accent-hi);color:#fff!important}
+.nav-cta{background:var(--text);color:var(--bg)!important;padding:7px 16px;border-radius:8px;font-weight:600;font-size:.8rem;transition:opacity .2s;font-family:var(--body)!important}
+.nav-cta:hover{opacity:.82;color:var(--bg)!important}
 .mobile-toggle{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text)}
 
 /* ---- HERO ---- */
-.hero{padding:140px 0 80px;background:radial-gradient(ellipse 800px 500px at 50% -5%,rgba(99,102,241,.07),transparent 60%)}
-.hero-inner{display:grid;grid-template-columns:1.1fr .9fr;gap:52px;align-items:center}
-.hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);color:var(--accent-hi);padding:5px 13px;border-radius:100px;font-size:.75rem;font-weight:600;margin-bottom:22px;border:1px solid var(--accent-soft-border);font-family:var(--mono)}
-.hero-badge span{width:5px;height:5px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite}
+.hero{padding:150px 0 84px}
+.hero-inner{display:grid;grid-template-columns:1.12fr .88fr;gap:56px;align-items:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--surface);color:var(--text-dim);padding:6px 13px;border-radius:100px;font-size:.72rem;font-weight:500;margin-bottom:26px;border:1px solid var(--border);font-family:var(--mono);letter-spacing:.02em}
+.hero-badge span{width:5px;height:5px;background:var(--green);border-radius:50%;animation:pulse 2s infinite;box-shadow:0 0 8px var(--green)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.hero h1{font-size:clamp(1.9rem,4vw,2.9rem);font-weight:800;line-height:1.12;margin-bottom:18px}
-.hero h1 .accent-word{color:var(--accent)}
-.hero p{font-size:1.02rem;color:var(--text-dimmer);max-width:460px;margin-bottom:30px;line-height:1.75}
-.hero-buttons{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:40px}
-.btn{display:inline-flex;align-items:center;gap:7px;padding:11px 22px;border-radius:9px;font-weight:600;font-size:.88rem;border:none;cursor:pointer;transition:all .2s ease;font-family:var(--body)}
-.btn-primary{background:var(--accent);color:#fff}
-.btn-primary:hover{background:var(--accent-hi);transform:translateY(-1px);color:#fff}
-.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
-.btn-secondary:hover{border-color:var(--accent-soft-border);transform:translateY(-1px)}
+.hero h1{font-family:var(--display);font-size:clamp(2.3rem,5vw,3.6rem);font-weight:600;line-height:1.06;margin-bottom:20px;letter-spacing:-.02em}
+.hero h1 .accent-word{background:linear-gradient(100deg,var(--blue-hi),var(--amber));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{font-size:1.04rem;color:var(--text-dimmer);max-width:470px;margin-bottom:32px;line-height:1.75}
+.hero-buttons{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:42px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:12px 22px;border-radius:9px;font-weight:600;font-size:.88rem;border:none;cursor:pointer;transition:all .2s ease;font-family:var(--body)}
+.btn-primary{background:var(--text);color:var(--bg)}
+.btn-primary:hover{opacity:.85;transform:translateY(-1px);color:var(--bg)}
+.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--blue-soft-border);background:var(--blue-soft)}
 .btn svg{width:16px;height:16px}
-.hero-meta{display:flex;gap:28px;flex-wrap:wrap;color:var(--text-dimmer);font-size:.8rem;font-family:var(--mono)}
+.hero-meta{display:flex;gap:24px;flex-wrap:wrap;color:var(--text-dimmer);font-size:.78rem;font-family:var(--mono)}
 .hero-meta strong{color:var(--text-dim);font-weight:600}
 
-/* ---- HERO WIDGET ---- */
-.plan-widget{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.4)}
-.plan-widget-header{display:flex;align-items:center;gap:7px;padding:12px 16px;border-bottom:1px solid var(--border-soft);background:var(--surface-2)}
-.pw-dot{width:10px;height:10px;border-radius:50%}
-.pw-dot.r{background:#ef4444}.pw-dot.y{background:#eab308}.pw-dot.g{background:#22c55e}
-.plan-widget-header span{margin-left:8px;color:var(--text-dimmer);font-size:.75rem;font-family:var(--mono)}
-.pw-badge{margin-left:auto;background:var(--accent-soft);color:var(--accent-hi);font-size:.65rem;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:.04em;font-family:var(--mono)}
-.plan-widget-body{padding:20px}
-.plan-widget-body h4{font-size:.92rem;font-weight:700;margin-bottom:14px;color:var(--text)}
-.pw-step{display:flex;align-items:flex-start;gap:10px;padding:7px 0;font-size:.84rem;color:var(--text-dimmer);border-bottom:1px dashed var(--border-soft)}
+/* ---- HERO WIDGET: MISSION CONTROL ---- */
+.console{background:linear-gradient(180deg,var(--surface),var(--surface) 60%,var(--surface-2));border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 30px 70px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.02) inset}
+.console-header{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--border-soft);background:var(--surface-2)}
+.pw-dot{width:9px;height:9px;border-radius:50%}
+.pw-dot.r{background:#4a4f5c}.pw-dot.y{background:#4a4f5c}.pw-dot.g{background:var(--green);box-shadow:0 0 6px var(--green)}
+.console-header span{margin-left:8px;color:var(--text-dimmer);font-size:.73rem;font-family:var(--mono)}
+.console-badge{margin-left:auto;background:var(--blue-soft);color:var(--blue-hi);font-size:.63rem;font-weight:700;padding:3px 9px;border-radius:5px;letter-spacing:.06em;font-family:var(--mono);border:1px solid var(--blue-soft-border)}
+.console-body{padding:22px}
+.console-body h4{font-size:.92rem;font-weight:600;margin-bottom:16px;color:var(--text);font-family:var(--body)}
+.pw-step{display:flex;align-items:flex-start;gap:11px;padding:8px 0;font-size:.83rem;color:var(--text-dimmer);border-bottom:1px dashed var(--border-soft)}
 .pw-step:last-child{border-bottom:none}
 .pw-check{flex-shrink:0;width:17px;height:17px;border-radius:5px;border:1.5px solid var(--border);display:grid;place-items:center;margin-top:1px;transition:all .3s ease}
-.pw-step.done .pw-check{background:var(--accent);border-color:var(--accent)}
+.pw-step.done .pw-check{background:var(--blue);border-color:var(--blue)}
 .pw-step.done{color:var(--text-dim)}
-.pw-check svg{width:10px;height:10px;color:#fff;opacity:0;transition:opacity .2s ease}
+.pw-check svg{width:10px;height:10px;color:#050608;opacity:0;transition:opacity .2s ease}
 .pw-step.done .pw-check svg{opacity:1}
+.telemetry{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border-soft);border-top:1px solid var(--border-soft)}
+.telem-cell{background:var(--surface);padding:14px 16px;text-align:left}
+.telem-label{font-family:var(--mono);font-size:.62rem;color:var(--text-dimmer);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.telem-value{font-family:var(--mono);font-size:1rem;font-weight:600;color:var(--text)}
+.telem-value.blue{color:var(--blue-hi)}
+.telem-value.amber{color:var(--amber)}
 
 /* ---- SECTION COMMON ---- */
-section{padding:88px 0}
-.section-label{display:inline-flex;align-items:center;gap:7px;font-size:.73rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;color:var(--accent);font-family:var(--mono)}
-.section-title{font-size:clamp(1.6rem,3.2vw,2.2rem);font-weight:800;margin-bottom:12px;line-height:1.2}
-.section-desc{font-size:.97rem;color:var(--text-dimmer);max-width:520px;line-height:1.7}
-.section-header{text-align:center;margin-bottom:52px}
+section{padding:96px 0}
+.section-label{display:inline-flex;align-items:center;gap:7px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;color:var(--blue-hi);font-family:var(--mono)}
+.section-label::before{content:"//";color:var(--amber)}
+.section-title{font-family:var(--display);font-size:clamp(1.7rem,3.4vw,2.35rem);font-weight:600;margin-bottom:14px;line-height:1.2;letter-spacing:-.01em}
+.section-desc{font-size:.97rem;color:var(--text-dimmer);max-width:540px;line-height:1.7}
+.section-header{text-align:center;margin-bottom:56px}
 .section-header .section-desc{margin:0 auto}
 
 /* ---- PROMISE ---- */
-.promise{background:var(--bg-alt)}
-.promise-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.promise-card{padding:26px;border-radius:var(--radius-lg);border:1px solid var(--border-soft);background:var(--surface);transition:border-color .2s}
-.promise-card:hover{border-color:var(--border)}
-.promise-card h3{font-size:.95rem;font-weight:700;margin-bottom:8px}
-.promise-card p{font-size:.84rem;color:var(--text-dimmer);line-height:1.65}
+.promise{background:var(--bg-alt);border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft)}
+.promise-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border-soft);border:1px solid var(--border-soft);border-radius:var(--radius-lg);overflow:hidden}
+.promise-card{padding:30px;background:var(--surface);transition:background .2s}
+.promise-card:hover{background:var(--surface-2)}
+.promise-card h3{font-size:.98rem;font-weight:600;margin-bottom:9px;font-family:var(--display)}
+.promise-card p{font-size:.85rem;color:var(--text-dimmer);line-height:1.65}
 
 /* ---- FEATURES ---- */
-.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.feature-card{padding:26px;border-radius:var(--radius-lg);border:1px solid var(--border-soft);background:var(--surface);transition:all .2s ease}
-.feature-card:hover{border-color:var(--accent-soft-border);transform:translateY(-2px)}
-.feature-icon{width:36px;height:36px;border-radius:8px;display:grid;place-items:center;margin-bottom:16px;background:var(--accent-soft);color:var(--accent-hi)}
-.feature-card h3{font-size:.95rem;font-weight:700;margin-bottom:7px}
-.feature-card p{font-size:.84rem;color:var(--text-dimmer);line-height:1.6}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.feature-card{padding:26px;border-radius:var(--radius-lg);border:1px solid var(--border-soft);background:var(--surface);transition:all .2s ease;position:relative;overflow:hidden}
+.feature-card::before{content:"";position:absolute;inset:0;background:radial-gradient(160px 100px at 0% 0%,var(--blue-soft),transparent 70%);opacity:0;transition:opacity .25s}
+.feature-card:hover{border-color:var(--blue-soft-border);transform:translateY(-2px)}
+.feature-card:hover::before{opacity:1}
+.feature-icon{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;margin-bottom:16px;background:var(--blue-soft);color:var(--blue-hi);position:relative}
+.feature-card h3{font-size:.94rem;font-weight:600;margin-bottom:7px;position:relative;font-family:var(--body)}
+.feature-card p{font-size:.83rem;color:var(--text-dimmer);line-height:1.6;position:relative}
+.feature-tag{display:inline-block;font-family:var(--mono);font-size:.6rem;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-soft-border);padding:2px 7px;border-radius:5px;margin-bottom:10px;letter-spacing:.03em}
 
 /* ---- COMPARISON TABLE ---- */
-.comparison{background:var(--bg-alt);overflow-x:auto}
-.comparison-table{width:100%;border-collapse:collapse;min-width:640px;font-size:.85rem}
-.comparison-table thead th{text-align:left;padding:12px 16px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);font-size:.8rem;white-space:nowrap}
-.comparison-table thead th:first-child{color:var(--text-dim)}
-.comparison-table tbody td{padding:12px 16px;border-bottom:1px solid var(--border-soft);color:var(--text-dim);white-space:nowrap}
-.comparison-table tbody td:first-child{font-weight:600;color:var(--text);white-space:normal;min-width:140px}
+.comparison{background:var(--bg-alt);overflow-x:auto;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft)}
+.comparison-table{width:100%;border-collapse:collapse;min-width:680px;font-size:.85rem}
+.comparison-table thead th{text-align:left;padding:13px 16px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);font-size:.72rem;white-space:nowrap;font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em}
+.comparison-table thead th:first-child{color:var(--text-dimmer)}
+.comparison-table thead th.clew-col{color:var(--blue-hi)}
+.comparison-table tbody td{padding:13px 16px;border-bottom:1px solid var(--border-soft);color:var(--text-dim);white-space:nowrap}
+.comparison-table tbody td:first-child{font-weight:500;color:var(--text);white-space:normal;min-width:150px}
 .comparison-table .yes{color:var(--green);font-weight:600}
 .comparison-table .no{color:var(--text-dimmer)}
 .comparison-table .partial{color:var(--amber);font-weight:500}
-.comparison-table .clew-col{color:var(--accent-hi);font-weight:600}
+.comparison-table .clew-col{color:var(--blue-hi);font-weight:600;background:var(--blue-soft)}
 
 /* ---- PROVIDERS ---- */
 .providers{background:var(--bg)}
-.provider-group-label{font-family:var(--mono);font-size:.72rem;color:var(--text-dimmer);text-transform:uppercase;letter-spacing:.07em;margin:0 auto 12px;max-width:880px;text-align:left}
-.providers-grid{display:flex;flex-wrap:wrap;gap:9px;max-width:880px;margin:0 auto 28px}
+.provider-group-label{font-family:var(--mono);font-size:.72rem;color:var(--text-dimmer);text-transform:uppercase;letter-spacing:.07em;margin:0 auto 12px;max-width:900px;text-align:left}
+.providers-grid{display:flex;flex-wrap:wrap;gap:9px;max-width:900px;margin:0 auto 28px}
 .provider-chip{padding:8px 14px;background:var(--surface);border:1px solid var(--border-soft);border-radius:100px;font-size:.82rem;font-weight:500;color:var(--text-dim);font-family:var(--mono);transition:border-color .2s}
-.provider-chip:hover{border-color:var(--border)}
-.provider-chip.local{border-color:var(--accent-soft-border);color:var(--text)}
+.provider-chip:hover{border-color:var(--blue-soft-border);color:var(--text)}
+.provider-chip.local{border-color:var(--blue-soft-border);color:var(--text)}
 .provider-chip.custom{border-color:var(--green-soft);color:var(--green)}
 
 /* ---- HOW IT WORKS ---- */
-.how-it-works{background:var(--bg-alt)}
+.how-it-works{background:var(--bg-alt);border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft)}
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:32px}
-.step{padding:0}
-.step-num{font-family:var(--mono);font-size:.78rem;color:var(--accent);margin-bottom:12px}
-.step h3{font-size:1rem;font-weight:700;margin-bottom:7px}
+.step-num{font-family:var(--mono);font-size:.78rem;color:var(--amber);margin-bottom:12px;letter-spacing:.05em}
+.step h3{font-size:1rem;font-weight:600;margin-bottom:7px;font-family:var(--body)}
 .step p{font-size:.85rem;color:var(--text-dimmer);line-height:1.65}
 
 /* ---- TECH STACK ---- */
@@ -151,13 +173,16 @@ section{padding:88px 0}
 .tech-badge{padding:8px 16px;background:var(--surface);border:1px solid var(--border-soft);border-radius:8px;font-size:.82rem;font-family:var(--mono);color:var(--text-dim)}
 
 /* ---- ROADMAP ---- */
-.roadmap{background:var(--bg-alt)}
-.roadmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:720px;margin:0 auto}
-.roadmap-col h3{font-size:.9rem;font-weight:700;margin-bottom:14px;color:var(--text)}
-.roadmap-list{list-style:none;display:flex;flex-direction:column;gap:10px}
-.roadmap-list li{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--text-dim)}
-.roadmap-list .done-icon{color:var(--green);flex-shrink:0;width:18px;height:18px}
-.roadmap-list .todo-icon{color:var(--text-dimmer);flex-shrink:0;width:18px;height:18px}
+.roadmap{background:var(--bg-alt);border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft)}
+.roadmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;max-width:900px;margin:0 auto;background:var(--border-soft);border:1px solid var(--border-soft);border-radius:var(--radius-lg);overflow:hidden}
+.roadmap-col{background:var(--surface);padding:28px}
+.roadmap-col h3{font-size:.85rem;font-weight:600;margin-bottom:16px;color:var(--text);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+.roadmap-col h3.done-h{color:var(--green)}
+.roadmap-col h3.todo-h{color:var(--amber)}
+.roadmap-list{list-style:none;display:flex;flex-direction:column;gap:11px}
+.roadmap-list li{display:flex;align-items:flex-start;gap:10px;font-size:.83rem;color:var(--text-dim);line-height:1.4}
+.roadmap-list .done-icon{color:var(--green);flex-shrink:0;width:16px;height:16px;margin-top:2px}
+.roadmap-list .todo-icon{color:var(--text-dimmer);flex-shrink:0;width:16px;height:16px;margin-top:2px}
 
 /* ---- CONTRIBUTE ---- */
 .contribute{text-align:center}
@@ -165,8 +190,10 @@ section{padding:88px 0}
 .contribute-links{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 
 /* ---- CTA ---- */
-.cta{background:var(--surface);text-align:center;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft)}
-.cta .section-desc{margin:0 auto 32px}
+.cta{background:linear-gradient(180deg,var(--surface),var(--bg-alt));text-align:center;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);position:relative;overflow:hidden}
+.cta::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 300px at 50% 0%,var(--blue-soft),transparent 70%);pointer-events:none}
+.cta .section-desc{margin:0 auto 32px;position:relative}
+.cta .section-title{position:relative}
 
 /* ---- FOOTER ---- */
 footer{padding:36px 0}
@@ -177,15 +204,12 @@ footer{padding:36px 0}
 .footer-links a:hover{color:var(--text-dim)}
 
 /* ---- RESPONSIVE ---- */
-@media(max-width:1200px){
-  .comparison-table{min-width:580px}
-}
+@media(max-width:1200px){.comparison-table{min-width:600px}}
 @media(max-width:1024px){
   .features-grid{grid-template-columns:repeat(2,1fr)}
   .promise-grid{grid-template-columns:repeat(2,1fr)}
   .hero-inner{grid-template-columns:1fr;gap:44px}
   .hero p{max-width:100%}
-  .roadmap-grid{grid-template-columns:1fr}
 }
 @media(max-width:768px){
   .nav-links{display:none}
@@ -194,25 +218,23 @@ footer{padding:36px 0}
   .features-grid{grid-template-columns:1fr}
   .promise-grid{grid-template-columns:1fr}
   .steps{grid-template-columns:1fr;gap:24px}
-  section{padding:60px 0}
-  .hero{padding:110px 0 52px}
+  .roadmap-grid{grid-template-columns:1fr}
+  .telemetry{grid-template-columns:1fr}
+  section{padding:64px 0}
+  .hero{padding:114px 0 56px}
   .container{padding:0 18px}
   .footer-inner{flex-direction:column;text-align:center}
   .comparison-table{font-size:.8rem}
   .comparison-table thead th,.comparison-table tbody td{padding:10px 12px}
 }
 @media(max-width:480px){
-  .hero h1{font-size:1.6rem}
-  .section-title{font-size:1.35rem}
+  .hero h1{font-size:1.9rem}
+  .section-title{font-size:1.4rem}
   .hero-buttons{flex-direction:column}
   .hero-buttons .btn{justify-content:center;width:100%}
   .hero-meta{flex-direction:column;gap:10px}
   .contribute-links{flex-direction:column;align-items:center}
   .contribute-links .btn{width:100%;max-width:280px;justify-content:center}
-  .tech-badges{gap:8px}
-  .tech-badge{font-size:.76rem;padding:6px 12px}
-  .providers-grid{gap:7px}
-  .provider-chip{font-size:.78rem;padding:7px 12px}
 }
 
 /* ---- FADE-IN ---- */
@@ -247,9 +269,9 @@ footer{padding:36px 0}
 <section class="hero">
   <div class="container hero-inner">
     <div>
-      <div class="hero-badge"><span></span> Open source &middot; MIT</div>
-      <h1>The native AI coding IDE that <span class="accent-word">plans before it acts</span></h1>
-      <p>Clew describes what it's about to do, then does it &mdash; one visible step at a time. 16 providers, TUI + GUI, ReAct agents, MCP support, zero telemetry. Your code never leaves your machine.</p>
+      <div class="hero-badge"><span></span> Open source &middot; MIT &middot; v2.1</div>
+      <h1>The agent that <span class="accent-word">shows its flight plan</span> before touching your code</h1>
+      <p>Clew plans, then executes one visible step at a time &mdash; across a sandboxed workspace, with a signed audit trail behind it. 16 providers, GUI + TUI + CLI + daemon, MCP support, zero telemetry. Your code never leaves your machine unless you choose otherwise.</p>
       <div class="hero-buttons">
         <a href="https://github.com/ilyaosovskoi/Clew/releases/latest" target="_blank" rel="noopener" class="btn btn-primary">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -267,20 +289,34 @@ footer{padding:36px 0}
       </div>
     </div>
 
-    <div class="plan-widget fade-in">
-      <div class="plan-widget-header">
+    <div class="console fade-in">
+      <div class="console-header">
         <div class="pw-dot r"></div><div class="pw-dot y"></div><div class="pw-dot g"></div>
-        <span>clew &middot; agent</span>
-        <div class="pw-badge">PLAN</div>
+        <span>clew &middot; general &middot; agent</span>
+        <div class="console-badge">PLAN</div>
       </div>
-      <div class="plan-widget-body">
+      <div class="console-body">
         <h4>Add a login form to the app</h4>
         <div id="pwSteps">
           <div class="pw-step"><div class="pw-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>List project files to find the entry point</div>
           <div class="pw-step"><div class="pw-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Read existing components for style and patterns</div>
           <div class="pw-step"><div class="pw-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Create the form and wire up validation</div>
           <div class="pw-step"><div class="pw-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Write a test for empty and invalid input</div>
-          <div class="pw-step"><div class="pw-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Run the tests and check for regressions</div>
+          <div class="pw-step"><div class="pw-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>Run the tests, then self-verify</div>
+        </div>
+      </div>
+      <div class="telemetry">
+        <div class="telem-cell">
+          <div class="telem-label">Model</div>
+          <div class="telem-value blue" id="telemModel">claude-sonnet</div>
+        </div>
+        <div class="telem-cell">
+          <div class="telem-label">Cost</div>
+          <div class="telem-value" id="telemCost">$0.00</div>
+        </div>
+        <div class="telem-cell">
+          <div class="telem-label">Guardian</div>
+          <div class="telem-value amber" id="telemGuardian">idle</div>
         </div>
       </div>
     </div>
@@ -291,22 +327,22 @@ footer{padding:36px 0}
 <section class="promise" id="promise">
   <div class="container">
     <div class="section-header">
-      <div class="section-label">The Promise</div>
-      <h2 class="section-title">Cursor + LM Studio + Multi-API Gateway + TUI, in one app</h2>
-      <p class="section-desc">No Python dependencies to install. No telemetry. Absolute privacy for local models, with the flexibility to plug in cloud APIs. Two frontends: Qt GUI and Textual TUI.</p>
+      <div class="section-label">The promise</div>
+      <h2 class="section-title">A full agentic environment, not just a chat pane</h2>
+      <p class="section-desc">No Python dependencies to install beyond the standard library. No telemetry. Absolute privacy for local models, with the flexibility to plug in cloud APIs. One agent runtime, four ways to reach it.</p>
     </div>
     <div class="promise-grid">
       <div class="promise-card fade-in">
-        <h3>Privacy-First</h3>
+        <h3>Privacy-first</h3>
         <p>Local models run 100% on-device. No telemetry, no tracking, no cloud unless you want it.</p>
       </div>
       <div class="promise-card fade-in">
-        <h3>16 AI Providers</h3>
-        <p>Anthropic, OpenAI, Gemini, DeepSeek, Groq, xAI, z.ai, Nvidia NIM, or run Llama/Mistral/Qwen locally via Ollama or LM Studio. Plus 200+ via OpenRouter.</p>
+        <h3>16 AI providers</h3>
+        <p>Anthropic, OpenAI, Gemini, DeepSeek, Groq, xAI, z.ai, Mistral, Nvidia NIM, and more &mdash; or run Llama/Mistral/Qwen locally via Ollama or LM Studio. Plus 200+ via OpenRouter.</p>
       </div>
       <div class="promise-card fade-in">
-        <h3>Dual Frontend</h3>
-        <p>Qt-powered desktop app with real-time streaming, plus Textual TUI for terminal workflows. Switch seamlessly.</p>
+        <h3>Four frontends, one runtime</h3>
+        <p>Qt desktop GUI, Textual TUI, headless CLI, and an HTTP daemon with messenger control &mdash; all sharing the same agent underneath.</p>
       </div>
     </div>
   </div>
@@ -318,7 +354,7 @@ footer{padding:36px 0}
     <div class="section-header">
       <div class="section-label">Features</div>
       <h2 class="section-title">Built around trust, not just speed</h2>
-      <p class="section-desc">What matters when you're letting something else touch your code: what it plans, what it costs, and how it fits the way you work.</p>
+      <p class="section-desc">What matters when you're letting something else touch your code: what it plans, what it costs, who's watching, and how it fits the way you work.</p>
     </div>
     <div class="features-grid">
       <div class="feature-card fade-in">
@@ -330,87 +366,81 @@ footer{padding:36px 0}
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
         </div>
-        <h3>Any model, one interface</h3>
-        <p>16 cloud providers or models on your own machine through Ollama, LM Studio, or Nvidia NIM. Switch the active model without leaving the project.</p>
+        <h3>Guardian safety review</h3>
+        <p>Rule-based risk assessment, optionally backed by a live model review. Verdict: Assure, Modify, or Reject &mdash; runs the same whether you're watching or not.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="M15 5l5 5"/></svg>
+        </div>
+        <h3>Signed audit trail</h3>
+        <p>Every tool call is Ed25519-signed and hash-chained to the one before it. Tampering, reordering, or deletion is detectable &mdash; keys never leave your machine.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3>Multi-provider consensus</h3>
+        <p>Run the same task on 2&ndash;3 providers in parallel and see a structured diff of how their approaches diverge, before you commit to one.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+        </div>
+        <h3>Smart task-decomposition router</h3>
+        <p>A cheap model splits your task into subtasks and routes each to whichever configured provider fits it best &mdash; by specialty and by cost. Add your API keys, pick auto, go.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h3>MCP client &amp; server</h3>
+        <p>Connect any external MCP tool into the agent's catalog, or expose Clew itself as an MCP provider for other agents &mdash; read-only or write mode.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <h3>Web search &amp; fetch</h3>
+        <p>MCP-first search with ordered fallback, plus safe page fetching through a read-only <code>researcher</code> role that can never write, execute, or touch git.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10"/><path d="M12 8v4l3 2"/></svg>
+        </div>
+        <h3>Automatic learning loop</h3>
+        <p>Detects rollbacks, force-pushes, and CI failures &mdash; and tasks that skipped self-verification &mdash; then writes a per-repo learning entry the agent reads next time.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <h3>Layered memory</h3>
+        <p>A live task canvas tracks the current job's steps in a few hundred tokens. A cross-session persona profile remembers how <em>you</em> like to work, size-capped and editable.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-tag">autonomous</span>
+        <div class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="16" r="1"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </div>
+        <h3>"Hermes" autonomous mode</h3>
+        <p>Sandbox the agent to one workspace at the OS-kernel level, then control it entirely from Telegram &mdash; mandatory allow-list, a <code>STOP</code> kill switch, Guardian still runs.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         </div>
         <h3>Budget guardrails</h3>
-        <p>Token usage, cost per provider, and burn rate, tracked live. Set daily/monthly limits, enable predictable mode for deterministic token usage.</p>
+        <p>Token usage and burn rate tracked live, per provider. Set hard cost caps, and cost-aware routing shifts to cheaper or local models under budget pressure.</p>
       </div>
       <div class="feature-card fade-in">
         <div class="feature-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
         </div>
         <h3>Smart context</h3>
-        <p>Git-aware filtering, relevance ranking, token budgeting, and live indexing. Clew reads your real project structure before proposing changes.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        </div>
-        <h3>MCP Protocol</h3>
-        <p>Built-in MCP client and manager. Connect external tools and knowledge bases &mdash; MCP tools appear alongside built-in agent tools.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-        </div>
-        <h3>Auto-Router</h3>
-        <p>Complexity-based provider and model selection with fallback chains. Automatically picks the best model for each task.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.2-.3-.4-.7-.4-1.1 0-.8.7-1.5 1.5-1.5H16c3.3 0 6-2.7 6-6 0-5-4.5-9-10-9z"/></svg>
-        </div>
-        <h3>Plugins & Skills</h3>
-        <p>Drop .py plugins for custom providers and API routes. SKILL.md packages guide agent behavior with YAML frontmatter activation.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M11 18H8a2 2 0 01-2-2V9"/></svg>
-        </div>
-        <h3>Git & Memory</h3>
-        <p>Built-in git tools: status, diff, stage, commit. Cross-chat memory with structured metadata so prior sessions inform new ones.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-        </div>
-        <h3>LSP Integration</h3>
-        <p>Python language server for autocomplete, hover, go-to-definition, and diagnostics &mdash; all running in a background thread.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-        </div>
-        <h3>Guardian Safety</h3>
-        <p>LLM-based safety reviewer for risky tool calls. Three levels: off, dangerous-only, all. Shows 3-button modal (Approve / Reject / Use Fix) with proposed alternatives.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        </div>
-        <h3>Capability Catalog</h3>
-        <p>20+ pre-built templates across 9 categories (code, refactor, test, debug, document, review, deploy, office, learn). Run via <code>/capabilities</code> with placeholder substitution.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="M15 5l5 5"/></svg>
-        </div>
-        <h3>Cross-Model Verification</h3>
-        <p>Second Opinion (Pro): ask a different model family to review risky actions. Verify last response: cross-family verifier checks correctness, safety, completeness after agent answers.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-        </div>
-        <h3>Custom Providers</h3>
-        <p>Add your own OpenAI-compatible endpoints via YAML config (~/.clew/providers.yaml) or drop Python plugins in ~/.clew/providers/. Hot-reload without restart.</p>
+        <p>Git-aware filtering, relevance ranking, token budgeting, and live indexing &mdash; with tombstone compaction so old context shrinks without disappearing.</p>
       </div>
     </div>
   </div>
@@ -451,13 +481,6 @@ footer{padding:36px 0}
             <td class="no">Cloud-only</td>
           </tr>
           <tr>
-            <td>Autonomous agents</td>
-            <td class="yes">ReAct + JSON tool calling</td>
-            <td class="yes">Yes</td>
-            <td class="yes">Yes</td>
-            <td class="partial">Limited</td>
-          </tr>
-          <tr>
             <td>Provider count</td>
             <td class="clew-col">16 native + 200+ via OpenRouter + custom</td>
             <td>5&ndash;10</td>
@@ -465,57 +488,64 @@ footer{padding:36px 0}
             <td>1 (Anthropic)</td>
           </tr>
           <tr>
-            <td>MCP Protocol</td>
-            <td class="yes">Built-in client & manager</td>
-            <td>Plugin</td>
+            <td>Guardian-style safety review</td>
+            <td class="yes">Rule-based + optional LLM review, 3 levels</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Signed audit trail</td>
+            <td class="yes">Ed25519 + hash chain, zero-cloud</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Multi-provider consensus</td>
+            <td class="yes">Parallel run + divergence report</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Task-decomposition routing</td>
+            <td class="yes">Subtask-level model selection by specialty + cost</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>Autonomous remote-control mode</td>
+            <td class="yes">Sandboxed workspace + Telegram control</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td>MCP protocol</td>
+            <td class="yes">Client &amp; server</td>
+            <td class="partial">Plugin</td>
             <td class="no">No</td>
             <td class="yes">Yes</td>
           </tr>
           <tr>
-            <td>Smart context</td>
-            <td class="clew-col">Git-aware, ranked, token-budgeted</td>
+            <td>Web search &amp; fetch</td>
+            <td class="yes">Read-only researcher sub-agent role</td>
             <td class="yes">Yes</td>
             <td class="yes">Yes</td>
-            <td class="partial">Limited</td>
+            <td class="partial">Preview</td>
           </tr>
           <tr>
-            <td>Auto-Router</td>
-            <td class="yes">Complexity-based + fallbacks</td>
-            <td class="no">No</td>
-            <td class="no">No</td>
-            <td class="no">No</td>
-          </tr>
-          <tr>
-            <td>Plugin system</td>
-            <td class="yes">Custom providers, routes, skills</td>
+            <td>Automatic learning loop</td>
+            <td class="yes">Auto-detects rollbacks/CI failures</td>
             <td class="no">No</td>
             <td class="no">No</td>
             <td class="no">No</td>
           </tr>
           <tr>
-            <td>Live token tracking</td>
-            <td class="yes">Real-time, per-provider quotas, budgets</td>
-            <td class="partial">Basic</td>
-            <td class="no">No</td>
-            <td class="no">No</td>
-          </tr>
-          <tr>
-            <td>Guardian safety</td>
-            <td class="yes">LLM reviewer, 3-level, fix suggestions</td>
-            <td class="no">No</td>
-            <td class="no">No</td>
-            <td class="no">No</td>
-          </tr>
-          <tr>
-            <td>Cross-model verification</td>
-            <td class="yes">Second Opinion + Verify response</td>
-            <td class="no">No</td>
-            <td class="no">No</td>
-            <td class="no">No</td>
-          </tr>
-          <tr>
-            <td>Capability catalog</td>
-            <td class="yes">20+ templates, 9 categories</td>
+            <td>Cost-aware routing</td>
+            <td class="yes">Budget pressure + provider health</td>
             <td class="no">No</td>
             <td class="no">No</td>
             <td class="no">No</td>
@@ -531,7 +561,7 @@ footer{padding:36px 0}
             <td>Open source</td>
             <td class="yes">MIT</td>
             <td class="no">Proprietary</td>
-            <td class="partial">Partial</td>
+            <td class="no">Proprietary</td>
             <td class="no">Proprietary</td>
           </tr>
         </tbody>
@@ -575,7 +605,7 @@ footer{padding:36px 0}
       <div class="provider-chip custom">OpenAI-compatible (YAML)</div>
       <div class="provider-chip custom">Python plugin</div>
     </div>
-    <p style="text-align:center;color:var(--text-dimmer);font-size:.82rem;margin-top:8px;font-family:var(--mono)">...and 200+ more models via OpenRouter gateway</p>
+    <p style="text-align:center;color:var(--text-dimmer);font-size:.82rem;margin-top:8px;font-family:var(--mono)">...and 200+ more models via the OpenRouter gateway</p>
   </div>
 </section>
 
@@ -596,12 +626,12 @@ footer{padding:36px 0}
       <div class="step fade-in">
         <div class="step-num">02</div>
         <h3>Connect a model</h3>
-        <p>Paste an API key for any supported cloud provider, or point Clew at a local Ollama, LM Studio, or Nvidia NIM server. Auto-detection included. Add custom providers via YAML or Python plugins.</p>
+        <p>Paste an API key for any supported cloud provider, or point Clew at a local Ollama or LM Studio server &mdash; auto-detected. Or just pick auto-router and let Clew handle it.</p>
       </div>
       <div class="step fade-in">
         <div class="step-num">03</div>
         <h3>Describe the task</h3>
-        <p>Open a project in the GUI (<code>clew</code>) or TUI (<code>clew_tui</code>) and tell Clew what you need in plain language. Review the plan, then let the agent read, write, and execute code.</p>
+        <p>Open a project in the GUI (<code>clew</code>) or TUI (<code>clew_tui</code>) and tell Clew what you need. Review the plan, then let the agent read, write, and execute code.</p>
       </div>
     </div>
   </div>
@@ -611,20 +641,19 @@ footer{padding:36px 0}
 <section class="tech-stack" id="tech-stack">
   <div class="container">
     <div class="section-header">
-      <div class="section-label">Tech Stack</div>
-      <h2 class="section-title">Zero runtime dependencies for core features</h2>
-      <p class="section-desc">No Docker, no Redis, no Node.js. Just Python + Qt. Native desktop with an embedded HTML5 frontend.</p>
+      <div class="section-label">Tech stack</div>
+      <h2 class="section-title">Zero required runtime dependencies</h2>
+      <p class="section-desc">No Docker, no Redis, no Node.js required. Just Python 3.11+. Rust acceleration is optional, for native performance only.</p>
     </div>
     <div class="tech-badges fade-in">
       <div class="tech-badge">Python 3.11+</div>
-      <div class="tech-badge">PySide6 / Qt 6.6+</div>
+      <div class="tech-badge">PySide6 / Qt</div>
       <div class="tech-badge">Textual (TUI)</div>
-      <div class="tech-badge">HTML5 / JS / CSS</div>
       <div class="tech-badge">SQLite</div>
-      <div class="tech-badge">python-lsp-server</div>
+      <div class="tech-badge">Rust (PyO3, optional)</div>
       <div class="tech-badge">Pure subprocess Git</div>
-      <div class="tech-badge">MCP Client</div>
-      <div class="tech-badge">Plugin System</div>
+      <div class="tech-badge">MCP client &amp; server</div>
+      <div class="tech-badge">Plugin system</div>
     </div>
   </div>
 </section>
@@ -638,109 +667,29 @@ footer{padding:36px 0}
     </div>
     <div class="roadmap-grid fade-in">
       <div class="roadmap-col">
-        <h3>Done (v2.0.1)</h3>
+        <h3 class="done-h">Shipped</h3>
         <ul class="roadmap-list">
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Multi-provider support (16 + OpenRouter + custom)
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            ReAct agent with JSON tool calling
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            MCP protocol integration
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Smart context & Git integration
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Auto-Router, LSP, Plugins, Skills
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Live token tracking & daily/monthly budgets
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Guardian safety reviewer (3 levels)
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Capability catalog (20 templates, 9 categories)
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Cross-model Second Opinion & Verification
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            TUI frontend (Textual) with full feature parity
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Nvidia NIM provider + custom provider system
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            Collaboration modes (Reviewer, Codegen, Pair, Observer)
-          </li>
-          <li>
-            <svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-            SQLite persistence + request serialization queues
-          </li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>16 providers + OpenRouter + custom providers</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>ReAct agent runtime, GUI + TUI + CLI + daemon</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Guardian safety review + signed audit trail</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Multi-provider consensus engine</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Web search &amp; fetch, read-only researcher role</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Automatic learning loop</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Layered memory: task canvas + persona profile</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Smart task-decomposition router</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Autonomous "Hermes" mode + messenger control</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Cost-aware routing + team spend reporting</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Inline section switch &amp; configurable timeouts</li>
+          <li><svg class="done-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>TUI visual overhaul, ~800+ automated tests</li>
         </ul>
       </div>
       <div class="roadmap-col">
-        <h3>Planned</h3>
+        <h3 class="todo-h">Planned</h3>
         <ul class="roadmap-list">
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Agent identity + tool-call audit (G5)
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Post-task bridge: CMS/editable handoff (G6)
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Polished TUI/GUI, fast bug fixes (G8)
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            More agent tools (web_fetch, web_search, notebook_edit, image_generation, terminal_interact, database_query)
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Shared session state for seamless TUI↔GUI switching
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Smart cost-aware AutoRouter (free/paid modes)
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Team spend dashboard
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            OAuth: SharePoint/Drive/OneDrive integration
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Audit trail export (hash-chain + signature)
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Web UI for remote access
-          </li>
-          <li>
-            <svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-            Team collaboration & shared sessions
-          </li>
+          <li><svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>Browser-based web UI (localhost) alongside the Qt GUI</li>
+          <li><svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>Expanded internal benchmark suite for regression tracking</li>
+          <li><svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>Continued TUI polish</li>
+          <li><svg class="todo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>Monetization features, building on existing cost-routing &amp; team-spend groundwork</li>
         </ul>
       </div>
     </div>
@@ -806,14 +755,24 @@ document.querySelectorAll('.fade-in').forEach(el=>obs.observe(el));
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pwSteps = document.querySelectorAll('#pwSteps .pw-step');
+const telemCost = document.getElementById('telemCost');
+const telemGuardian = document.getElementById('telemGuardian');
 let pwIndex = 0;
 function runPlanLoop(){
   pwSteps.forEach(s=>s.classList.remove('done'));
   pwIndex = 0;
-  if(reduceMotion){ pwSteps.forEach(s=>s.classList.add('done')); return; }
+  telemCost.textContent = '$0.00';
+  telemGuardian.textContent = 'idle';
+  if(reduceMotion){ pwSteps.forEach(s=>s.classList.add('done')); telemCost.textContent='$0.03'; telemGuardian.textContent='assure'; return; }
   const tick = ()=>{
-    if(pwIndex >= pwSteps.length){ setTimeout(runPlanLoop, 2600); return; }
+    if(pwIndex >= pwSteps.length){
+      telemGuardian.textContent = 'assure';
+      setTimeout(runPlanLoop, 2600);
+      return;
+    }
     pwSteps[pwIndex].classList.add('done');
+    telemCost.textContent = '$0.0' + (pwIndex + 1);
+    telemGuardian.textContent = pwIndex === 2 ? 'review' : (pwIndex >= 3 ? 'assure' : 'idle');
     pwIndex++;
     setTimeout(tick, 750);
   };
