@@ -50,6 +50,10 @@ dependencies = [
     "pyyaml>=6.0",
     "pygments>=2.18.0",
     "rich>=13.7.0",
+    # .gitignore-aware file filtering in clew/code_viewer.py. Imported
+    # lazily with a graceful no-op fallback (convention #4) so a missing
+    # import never breaks the editor — same pattern as cryptography below.
+    "pathspec>=0.10.0",
     # Office Worker section — built-from-scratch Python wrapper over docx/xlsx/pptx
     "python-docx>=1.1.0",
     "openpyxl>=3.1.0",
