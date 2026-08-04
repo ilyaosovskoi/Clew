@@ -17,7 +17,33 @@ readable.
 
 from typing import Optional
 
-from .types import Task
+from .types import Task, TaskType
+
+
+def _load_office_tool_schema() -> str:
+    """Lazily import OFFICE_TOOL_SCHEMA from clew.office_worker.
+
+    Imported lazily so the heavy ``python-docx`` / ``openpyxl`` /
+    ``python-pptx`` imports are only paid when the agent actually
+    enters the office section. The previous module-level reference
+    (``OFFICE_TOOL_SCHEMA`` without an import) was a NameError waiting
+    to happen — it only didn't crash because the office section is
+    rarely entered in tests.
+    """
+    try:
+        from clew.office_worker import OFFICE_TOOL_SCHEMA
+        return OFFICE_TOOL_SCHEMA
+    except Exception:
+        return ""
+
+
+def _load_office_system_suffix() -> str:
+    """Lazily import OFFICE_SYSTEM_SUFFIX from clew.office_worker."""
+    try:
+        from clew.office_worker import OFFICE_SYSTEM_SUFFIX
+        return OFFICE_SYSTEM_SUFFIX
+    except Exception:
+        return ""
 
 
 TOOL_SCHEMA = """Available tools (call exactly ONE per step using JSON):
@@ -562,7 +588,7 @@ class PromptBuilder:
         # section. The base TOOL_SCHEMA has a short comment about it
         # but the full per-tool JSON examples only appear here.
         if section == "office":
-            schema = schema + "\n\n" + OFFICE_TOOL_SCHEMA
+            schema = schema + "\n\n" + _load_office_tool_schema()
         prompt = SYSTEM_PROMPT.format(
             tool_schema=schema,
             few_shot_examples=FEW_SHOT_EXAMPLES,
@@ -572,7 +598,7 @@ class PromptBuilder:
         if section == "heavy_code":
             prompt = prompt + "\n\n" + HEAVY_CODE_SYSTEM_SUFFIX
         if section == "office":
-            prompt = prompt + "\n\n" + OFFICE_SYSTEM_SUFFIX
+            prompt = prompt + "\n\n" + _load_office_system_suffix()
         return prompt
 
     @staticmethod

@@ -322,6 +322,32 @@ class CommandPalette(ModalScreen):
             else:
                 self._on_select_and_close(selected_id)
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle Enter key pressed while the filter Input has focus.
+
+        This is the EXACT bug issue #17 exists to catch going forward:
+        the ``enter`` binding on the ModalScreen only fires when focus
+        is NOT on the Input. When the user types a filter string and
+        presses Enter, Textual delivers it as ``Input.Submitted`` to
+        the Input, NOT as a binding to the screen. Without this
+        handler, the palette was functionally dead for keyboard users
+        — they could filter and navigate with Up/Down, but pressing
+        Enter did nothing.
+
+        The fix: handle ``Input.Submitted`` the same way as the
+        ``action_select_item`` binding — call ``action_select_item()``
+        so the highlighted option is selected.
+
+        Mouse clicks go through ``on_option_list_selected`` and are
+        unaffected.
+        """
+        # Don't let Input's default Submitted handler also fire
+        # (which would close the palette via the parent App's
+        # on_input_submitted).
+        event.prevent_default()
+        event.stop()
+        self.action_select_item()
+
     def _on_select_and_close(
         self, command_id: str, needs_sub: bool = False
     ) -> None:

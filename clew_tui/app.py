@@ -402,6 +402,19 @@ class ClewTUIApp(App):
             self._open_collab_palette()
         elif cmd_id == "storage":
             self._open_storage_palette()
+        elif cmd_id == "capabilities":
+            # v2.1.1 (G22b): route through _exec_capabilities("") so
+            # selecting /capabilities from the main palette actually
+            # opens the browse palette. Without this, the main-palette
+            # selection fell through to the "needs a parameter" branch
+            # even though the entry is marked has_sub_options=True —
+            # same class of dead-binding bug issue #17 was opened for.
+            self._exec_capabilities("")
+        elif cmd_id == "handoff":
+            # v2.1.1 (G22b): same fix — list_handoffs() shows the
+            # handoff browser. If there are no handoffs, _exec_handoff
+            # already prints a helpful message.
+            self._exec_handoff("list")
         else:
             self.query_one(ChatLog).add_system(
                 f"Command /{cmd_id} needs a parameter. Type /{cmd_id} <value> directly."

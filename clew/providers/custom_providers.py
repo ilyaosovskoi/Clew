@@ -14,12 +14,30 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
-import yaml
+try:
+    import yaml  # type: ignore[import]
+except ImportError:  # pragma: no cover - exercised in minimal envs
+    yaml = None  # type: ignore[assignment]
 
 from .base import Provider, ProviderConfig
 from .registry import ProviderRegistry
 
 logger = logging.getLogger(__name__)
+
+
+def _yaml_safe_load(text: str) -> Any:
+    """Load YAML if pyyaml is installed, else return {}."""
+    if yaml is None:
+        logger.debug("[custom_providers] pyyaml not installed — skipping YAML config")
+        return {}
+    return yaml.safe_load(text)
+
+
+def _yaml_dump(data: Any) -> str:
+    """Dump YAML if pyyaml is installed, else fall back to repr()."""
+    if yaml is None:
+        return repr(data)
+    return yaml.safe_dump(data, default_flow_style=False)
 
 
 DEFAULT_PROVIDERS_DIR = Path.home() / ".clew" / "providers"
@@ -56,7 +74,7 @@ def load_custom_providers_config() -> List[Dict[str, Any]]:
 
     try:
         with open(config_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+            data = _yaml_safe_load(f.read()) or {}
         providers = data.get("providers", [])
         logger.info(f"[custom_providers] Loaded {len(providers)} custom provider configs from {config_path}")
         return providers

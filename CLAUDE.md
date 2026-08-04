@@ -258,3 +258,61 @@ Test scripts created in `test_scripts/` need to be run after fixing import issue
 - `test_providers.py` — Provider switching & AutoRouter
 
 **Known blocker**: Missing import in `clew/agent_runtime/runtime.py:288` — needs `from clew.skill_loader import load_all_skills_with_builtins`. Fix this first, then run `import clew.skill_loader` line, then run `python -m pytest clew/tests/` + the 6 test scripts.
+
+## v2.2.0 (2026-08-04) — G22a, G22b ✅ COMPLETED
+
+### G22a — Agent Quality Benchmark Suite
+**Files:** 
+- `clew/benchmarks/__init__.py` — Public API: TaskSpec, BenchmarkRunner, RunConfig, RunSummary, load_all_tasks, run.
+- `clew/benchmarks/_base.py` — TaskSpec / EvaluationReport / TaskResult dataclasses; Section + Difficulty enums; discover_task_modules + load_all_tasks; evaluator helpers (file_exists, function_exists, function_signature_has).
+- `clew/benchmarks/runner.py` — BenchmarkRunner class with dry-run + real-run + mock-provider modes; _FakeProvider for harness self-tests; _make_fake_registry helper; write_scorecard persistence.
+- `clew/benchmarks/cli.py` — `clew-bench` CLI entry point: `list` / `run` / `diff` subcommands.
+- `clew/benchmarks/diff_report.py` — diff_scorecards + format_diff_report — pass→fail / fail→pass detection, cost/time/token deltas.
+- `clew/benchmarks/README.md` — Design rationale + usage docs + scorecard format spec.
+- 16 tasks across 3 sections: general (10), heavy_code (3), office (3).
+- `clew/tests/test_g22a_benchmark_harness.py` — 23 tests for the harness itself (discovery, dry-run, CLI, diff, regression-guards for the 5 fixed NameErrors).
+
+**Modified files (real regressions found + fixed by the harness):**
+- `clew/agent_runtime/runtime.py` — Added 4 missing imports: `build_skill_catalog` from `clew.skill_loader`, `ProviderMessage` + `ProviderResponse` from `clew.providers`, `AgentStep` from `.types`.
+- `clew/agent_runtime/prompts.py` — Added `TaskType` to existing `.types` import. Added lazy loader helpers `_load_office_tool_schema()` and `_load_office_system_suffix()`.
+- `clew/agent_runtime/__init__.py` — Wrapped `from .worker import AgentWorker` in try/except for headless/CI environments.
+- `clew/providers/custom_providers.py` — Wrapped `import yaml` in try/except with fallback helpers.
+
+**Usage:**
+```bash
+clew-bench list                    # List every available task
+clew-bench run --dry-run          # Validate tasks (no LLM calls) — safe for CI
+clew-bench run --provider groq    # Run with real provider (costs money)
+clew-bench run --section general  # Run only general-section tasks
+clew-bench run --mock-provider    # Mock provider — proves harness works
+clew-bench diff base.json new.json # Diff scorecards for regression tracking
+```
+
+### G22b — TUI Interaction Testing Program
+**Files:**
+- `clew_tui/tests/__init__.py` — Package marker + docs.
+- `clew_tui/tests/conftest.py` — pytest config: registers `interaction` marker, auto-marks tests, provides `fake_bridge` fixture + isolated HOME.
+- `clew_tui/tests/_fake_bridge.py` — `FakeClewBridge` — records every call for assertion without real LLM creds.
+- `clew_tui/tests/_helpers.py` — `TUIInteractionCase` helper with full interaction API.
+- `clew_tui/tests/test_palette_main.py` — 7 tests for main Ctrl+P palette (includes the test for bug #17).
+- `clew_tui/tests/test_palette_sub_palettes.py` — 25 parameterised tests across all 9 sub-palette commands.
+- `clew_tui/tests/test_broader_interactions.py` — 21 tests: chat, slash commands, modals, theme, inline section switching.
+
+**Modified files (real bugs found + fixed by the new tests):**
+- `clew_tui/widgets/command_palette.py` — Added `on_input_submitted` handler (THE fix for bug #17: Enter key in filter Input now selects highlighted item).
+- `clew_tui/app.py` — Added `capabilities` and `handoff` routes to `_open_sub_palette_for_cmd` (dead bindings for those commands now work).
+
+**Usage:**
+```bash
+pytest clew_tui/tests/ -m interaction              # All 53 interaction tests
+pytest clew_tui/tests/test_palette_main.py -m interaction    # Main palette (bug #17 test)
+pytest clew_tui/tests/test_palette_sub_palettes.py -m interaction  # 25 sub-palette cases
+pytest clew_tui/tests/test_broader_interactions.py -m interaction  # 21 broader tests
+pytest clew/ clew_tui/ -m "not interaction"        # Exclude interaction tests from main run
+```
+
+### Loop engineering docs
+- `loops/archive/loop-7-g22a-agent-benchmark-suite.md` — Loop 7 documentation.
+- `loops/archive/loop-8-g22b-tui-interaction-tests.md` — Loop 8 documentation.
+- `CHANGES_update_11.md` — This update summary.
+- `docs/TEST_RESULTS_update_11.md` — Full test run results.

@@ -56,7 +56,18 @@ from .prompts import (
 )
 from .parser import OutputParser, _warn_unknown_tools
 from .runtime import AgentRuntime
-from .worker import AgentWorker
+
+# v2.1.1 (G22a): the AgentWorker import pulls in PySide6.QtCore, which
+# is only available when the GUI deps are installed. The headless CLI,
+# the daemon, and the benchmark harness all use AgentRuntime WITHOUT
+# ever touching the GUI — they must not crash on import just because
+# PySide6 is missing. Wrap the worker import in try/except so the
+# public AgentRuntime API is always available; AgentWorker is only
+# exposed when its dependency is present.
+try:  # pragma: no cover - exercised when PySide6 is installed
+    from .worker import AgentWorker
+except ImportError:  # pragma: no cover - exercised in headless / CI envs
+    AgentWorker = None  # type: ignore[assignment,misc]
 
 __all__ = [
     # types
