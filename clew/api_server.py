@@ -41,6 +41,59 @@ Endpoints:
     GET  /api/activity/stats      v1.2.0 — counts by category/status
     GET  /api/activity/export     v1.2.0 — full log as JSON download
     POST /api/activity/clear      v1.2.0 — empty the activity log
+
+v2.2.1 extended endpoints (installed from clew.api_extended):
+    Custom providers:
+        GET  /api/providers/custom/list    List user-defined providers
+        POST /api/providers/custom/add     Add a custom provider (incl. Nvidia NIM)
+        POST /api/providers/custom/update  Update an existing custom provider
+        POST /api/providers/custom/remove  Remove a custom provider
+        POST /api/providers/custom/test    Test a custom-provider config
+        GET  /api/providers/templates      Built-in templates (NIM / Ollama / etc.)
+    Capability catalog:
+        GET  /api/capabilities/list        Browse capability templates
+        GET  /api/capabilities/categories  List categories
+        GET  /api/capabilities/get?id=     Get a single capability
+        POST /api/capabilities/run         Fill & run a template
+    Second Opinion / Verify / Consensus:
+        GET/POST /api/second_opinion/config  Get/set cross-model config
+        POST     /api/second_opinion/run     Run second-opinion review
+        GET      /api/second_opinion/providers
+        POST     /api/verify/run             Verify last agent response
+        GET/POST /api/consensus/config       Multi-provider consensus config
+        POST     /api/consensus/run          Run consensus across providers
+    Token budget / Cost router / Spend dashboard:
+        GET/POST /api/budget/{get,set,reset,check}
+        GET/POST /api/cost/{config,cap,route,apply}
+        GET/POST /api/spend/{identity,team,budget,report,sources_*,export_*}
+    Hooks / Checkpoints / Handoffs:
+        GET/POST /api/hooks/{list,register,remove,toggle,test,stats}
+        GET/POST /api/checkpoint/{create,list,get,rewind,rewind_to,diff,auto,stats}
+        GET/POST /api/handoff/{create,list,get,block_status,todo_toggle,reorder,delete,revision_prompt,export_md}
+    Agents / Audit / Learnings:
+        GET  /api/agents/{identity,list}     POST /api/agents/spawn
+        GET  /api/audit/{summary,filter,export_json,export_csv,signed_export}
+        POST /api/audit/signed_verify
+        GET/POST /api/learnings/{list,show,dismiss,restore,scan,dismissed}
+    GitHub / MCP server / Notifications / Daemon:
+        GET/POST /api/github/{status,set_token,set_repo,detect_repo,list_prs,
+                  get_pr,create_pr,pr_context,list_issues,get_issue,
+                  create_issue,comment_pr,generate_action}
+        GET  /api/mcp_server/{list_tools,status}
+        GET/POST /api/notify/{backends,configure,toggle,test,test_all,set_events,
+                  status,remove}
+        GET/POST /api/daemon/{submit,status}
+    Persona / Router / Pro / Collaboration / Persistence / Slash:
+        GET/POST /api/persona/{get,set,reset}
+        GET/POST /api/router/mode
+        GET/POST /api/pro/{status,toggle}
+        GET/POST /api/collaboration/{modes,run}
+        GET  /api/usage/get
+        GET  /api/compaction/stats
+        GET/POST /api/persistence/{backend,sessions}
+        GET/POST /api/slash_commands/{list,resolve}
+        GET/POST /api/section/{get,set}
+        GET  /api/websearch/status
 """
 
 from __future__ import annotations
@@ -1013,7 +1066,7 @@ class ClewAPIHandler(BaseHTTPRequestHandler):
         for p in self.ctx.registry.list_providers():
             pid = p['id']
             pcfg = self.ctx.config.get('providers', {}).get(pid, {})
-            key = pcfg.get('api_key', '')
+            key = pcfg.get('api_key') or ''
             out.append({
                 **p,
                 'model': pcfg.get('model', p['model']),
@@ -2242,3 +2295,20 @@ class ClewAPIServer:
     def auth_token(self) -> str:
         """v1.0.5-security: bearer token clients must send on mutating endpoints."""
         return self.ctx._auth_token
+
+
+# ── v2.2.1: extended endpoints ───────────────────────────────────────
+# Install the api_extended route table so the browser GUI can reach
+# every backend capability that was previously only exposed via the
+# TUI bridge (capabilities, hooks, checkpoints, github, handoffs, cost
+# router, spend dashboard, consensus, learnings, second_opinion, budget,
+# verify, persona, router mode, mcp_server, notify, daemon, custom
+# providers, etc.).
+#
+# This is a no-op if api_extended is not importable (e.g. in stripped
+# down test environments) so legacy callers keep working.
+try:
+    from .api_extended import install as _install_extended_routes
+    _install_extended_routes()
+except Exception as _api_ext_err:  # pragma: no cover
+    logger.warning("[api_server] api_extended install failed: %s", _api_ext_err)

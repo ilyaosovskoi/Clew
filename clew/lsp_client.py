@@ -1,9 +1,19 @@
 """
-LSP Client for Clew
-Language Server Protocol client for Python (via python-lsp-server / jedi).
-Provides: autocomplete, hover, go-to-definition, diagnostics, signature help.
-Async operations via QThread — non-blocking UI.
+LSP Client for Clew (Qt-free, v2.2.0).
+
+Language Server Protocol client for Python (via python-lsp-server /
+jedi-language-server). Provides: autocomplete, hover, go-to-definition,
+diagnostics, signature help. Async operations run on plain
+``threading.Thread`` — no Qt / PySide6 dependency.
+
+v2.2.0: the legacy ``QObject`` / ``Signal`` / ``QThread`` based LSPClient
+has been rewritten on top of :mod:`threading` and a tiny callback-list
+``_Signal`` shim that preserves the public ``.connect()`` / ``.emit()``
+API. All existing call sites (the legacy ``web_bridge`` bridge, the
+``api_server`` HTTP handler, the TUI) keep working unchanged.
 """
+
+from __future__ import annotations
 
 import os
 import json
@@ -12,14 +22,52 @@ import subprocess
 import threading
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass
 from enum import Enum
 
-from PySide6.QtCore import QThread, Signal, QObject
-
 logger = logging.getLogger(__name__)
 
+
+# ── Tiny signal shim ──────────────────────────────────────────────────
+
+class _Signal:
+    """Drop-in replacement for ``PySide6.QtCore.Signal``.
+
+    Only the ``connect`` + ``emit`` API is implemented. Thread-safe
+    via a lock so emit() from the reader thread doesn't race with
+    connect() from the main thread.
+    """
+
+    def __init__(self, *arg_types: Any) -> None:
+        self._listeners: List[Callable[..., None]] = []
+        self._lock = threading.Lock()
+
+    def connect(self, fn: Callable[..., None]) -> None:
+        with self._lock:
+            self._listeners.append(fn)
+
+    def disconnect(self, fn: Optional[Callable[..., None]] = None) -> None:
+        with self._lock:
+            if fn is None:
+                self._listeners.clear()
+            else:
+                try:
+                    self._listeners.remove(fn)
+                except ValueError:
+                    pass
+
+    def emit(self, *args: Any) -> None:
+        with self._lock:
+            listeners = list(self._listeners)
+        for fn in listeners:
+            try:
+                fn(*args)
+            except Exception:
+                logger.exception("[lsp] signal listener raised")
+
+
+# ── Data classes ──────────────────────────────────────────────────────
 
 class LSPMethod(Enum):
     INITIALIZE = "initialize"
@@ -69,29 +117,32 @@ class Diagnostic:
     code: str = ""
 
 
-class LSPClient(QObject):
+# ── LSP Client ────────────────────────────────────────────────────────
+
+class LSPClient:
     """
     LSP client for Clew IDE.
     Communicates with python-lsp-server via JSON-RPC over stdio.
     """
 
-    completions_ready = Signal(str, list)  # uri, List[CompletionItem]
-    hover_ready = Signal(str, object)  # uri, HoverInfo
-    definitions_ready = Signal(str, list)  # uri, List[Location]
-    diagnostics_ready = Signal(str, list)  # uri, List[Diagnostic]
-    signature_help_ready = Signal(str, object)  # uri, dict
-    server_started = Signal(bool, str)  # success, message
-    server_stopped = Signal()
+    # Public signals (callback-list based, drop-in for Qt signals).
+    completions_ready = _Signal(str, list)        # uri, List[CompletionItem]
+    hover_ready = _Signal(str, object)            # uri, HoverInfo | None
+    definitions_ready = _Signal(str, list)        # uri, List[Location]
+    diagnostics_ready = _Signal(str, list)        # uri, List[Diagnostic]
+    signature_help_ready = _Signal(str, object)   # uri, dict
+    server_started = _Signal(bool, str)           # success, message
+    server_stopped = _Signal()
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self, parent: Any = None) -> None:
+        # parent is intentionally ignored — kept for backward compat
+        # with the legacy QObject constructor signature.
         self.process: Optional[subprocess.Popen] = None
         self._request_id = 0
         self._pending_requests: Dict[int, str] = {}  # id -> method
         self._lock = threading.Lock()
         self._initialized = False
-        self._read_thread: Optional[QThread] = None
-        self._read_worker: Optional['LSPReaderWorker'] = None
+        self._read_thread: Optional[threading.Thread] = None
         self._should_stop = False
         self._server_capabilities: Dict[str, Any] = {}
         self._open_documents: Dict[str, Dict] = {}  # uri -> version info
@@ -108,9 +159,7 @@ class LSPClient(QObject):
         v1.0.5-security: hold `self._lock` around stdin write/flush so
         concurrent writes from the UI thread (did_open/did_change) and
         the shutdown thread don't interleave bytes on the same pipe
-        (BUGS_REPORT H-LSP-2). Without this, two threads could each
-        write a partial JSON-RPC frame, producing malformed messages
-        the LSP server rejects.
+        (BUGS_REPORT H-LSP-2).
         """
         if not self.process or self.process.poll() is not None:
             logger.warning("LSP server not running")
@@ -129,7 +178,7 @@ class LSPClient(QObject):
 
     def _read_responses(self):
         """Background thread: read responses from LSP server."""
-        while self.process and self.process.poll() is None:
+        while not self._should_stop and self.process and self.process.poll() is None:
             try:
                 # Read header
                 header = b""
@@ -145,7 +194,10 @@ class LSPClient(QObject):
                 content_length = 0
                 for line in header.decode("utf-8").strip().split("\r\n"):
                     if line.startswith("Content-Length:"):
-                        content_length = int(line.split(":")[1].strip())
+                        try:
+                            content_length = int(line.split(":")[1].strip())
+                        except ValueError:
+                            content_length = 0
 
                 if content_length == 0:
                     continue
@@ -170,7 +222,6 @@ class LSPClient(QObject):
 
             if method == LSPMethod.TEXT_DOCUMENT_COMPLETION.value:
                 items = self._parse_completions(response.get("result", {}))
-                # Extract uri from pending context if available
                 self.completions_ready.emit("", items)
 
             elif method == LSPMethod.TEXT_DOCUMENT_HOVER.value:
@@ -257,7 +308,7 @@ class LSPClient(QObject):
         return result
 
     def start_server(self, workspace_path: Optional[str] = None):
-        """Start python-lsp-server."""
+        """Start python-lsp-server (or jedi-language-server fallback)."""
         if workspace_path:
             self._workspace_path = workspace_path
 
@@ -265,17 +316,19 @@ class LSPClient(QObject):
             # Check if pylsp is available
             result = subprocess.run(
                 ["python3", "-m", "pylsp", "--version"],
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5,
             )
             if result.returncode != 0:
                 # Try jedi-language-server as fallback
                 result = subprocess.run(
                     ["python3", "-m", "jedi_language_server", "--version"],
-                    capture_output=True, text=True, timeout=5
+                    capture_output=True, text=True, timeout=5,
                 )
                 if result.returncode != 0:
-                    self.server_started.emit(False,
-                        "python-lsp-server not installed. Run: pip install python-lsp-server")
+                    self.server_started.emit(
+                        False,
+                        "python-lsp-server not installed. Run: pip install python-lsp-server",
+                    )
                     return
                 cmd = ["python3", "-m", "jedi_language_server"]
             else:
@@ -294,24 +347,15 @@ class LSPClient(QObject):
 
             logger.info(f"LSP server started (PID: {self.process.pid})")
 
-            # v1.0.5-security: start reader thread properly using worker pattern.
-            # CRITICAL FIX (BUGS_REPORT C-LSP-1): previously the worker read
-            # 4 KB chunks from stdout and emitted `data_received(bytes)` — but
-            # nothing was connected to that signal. The proper JSON-RPC framing
-            # logic in `_read_responses` was never invoked, so every LSP
-            # response (completions, hover, definition, diagnostics) was read
-            # from the pipe and thrown away. LSP was effectively dead code.
-            #
-            # Fix: pass the client itself to the worker so it can call
-            # `client._read_responses()` directly on the worker thread.
-            # That method does proper Content-Length framing and dispatches
-            # to `_handle_response`, which emits the right Qt signals.
-            self._read_thread = QThread()
-            self._read_thread.setObjectName(f"LSPReader-{cmd[-1]}")
-            self._read_worker = LSPReaderWorker(self.process, self)
-            self._read_worker.moveToThread(self._read_thread)
-            self._read_thread.started.connect(self._read_worker.run)
-            self._read_worker.finished.connect(self._read_thread.quit)
+            # v1.0.5-security / v2.2.0: the reader is now a plain
+            # threading.Thread that calls ``_read_responses`` directly
+            # (no QThread / worker / signal indirection). Same framing
+            # logic, just no Qt event loop dependency.
+            self._read_thread = threading.Thread(
+                target=self._read_responses,
+                name=f"LSPReader-{cmd[-1]}",
+                daemon=True,
+            )
             self._read_thread.start()
 
             # Send initialize
@@ -401,15 +445,14 @@ class LSPClient(QObject):
 
     def _cleanup(self):
         """Clean up LSP resources: stop reader thread, terminate process."""
-        # Stop reader thread
         self._should_stop = True
-        if self._read_thread is not None:
-            self._read_thread.quit()
-            self._read_thread.wait(timeout=5000)  # 5 second timeout
+        if self._read_thread is not None and self._read_thread.is_alive():
+            # Reader is daemon — give it a moment, then move on.
+            try:
+                self._read_thread.join(timeout=2.0)
+            except Exception:
+                pass
             self._read_thread = None
-
-        if self._read_worker is not None:
-            self._read_worker = None
 
         # Terminate process
         if self.process is not None:
@@ -451,7 +494,12 @@ class LSPClient(QObject):
 
     def __del__(self):
         """Ensure cleanup on object destruction."""
-        self._cleanup()
+        try:
+            self._cleanup()
+        except Exception:
+            pass
+
+    # ── Document sync ───────────────────────────────────────────
 
     def did_open(self, uri: str, language_id: str, text: str, version: int = 1):
         """Notify server that document was opened."""
@@ -505,6 +553,8 @@ class LSPClient(QObject):
                 "textDocument": {"uri": uri}
             }
         })
+
+    # ── Requests ────────────────────────────────────────────────
 
     def request_completion(self, uri: str, line: int, character: int):
         """Request completions at position."""
@@ -579,50 +629,11 @@ class LSPClient(QObject):
         return self._server_capabilities.copy()
 
 
-class LSPReaderWorker(QObject):
-    """Worker thread for reading from LSP server stdout.
-
-    v1.0.5-security: CRITICAL FIX (BUGS_REPORT C-LSP-1).
-    Previously this worker read raw 4 KB chunks from stdout and emitted
-    `data_received(bytes)` — but nothing was connected to that signal.
-    The proper JSON-RPC framing logic in `LSPClient._read_responses`
-    was never invoked, so every LSP response was silently discarded
-    and the entire LSP feature set (completions, hover, definition,
-    diagnostics) was dead code.
-
-    Fix: instead of emitting raw bytes, the worker now holds a weak
-    reference to the parent `LSPClient` and calls its `_read_responses()`
-    method directly. That method does proper Content-Length header
-    parsing and dispatches each complete JSON-RPC message to
-    `_handle_response`, which emits the right Qt signals.
-    """
-
-    data_received = Signal(bytes)   # kept for backward-compat (no longer emitted)
-    finished = Signal()
-
-    def __init__(self, process: subprocess.Popen, client: Optional["LSPClient"] = None):
-        super().__init__()
-        self.process = process
-        self._client = client
-
-    def run(self):
-        """Read & dispatch LSP responses until the process exits."""
-        try:
-            if self._client is not None:
-                # New correct path: let LSPClient do framing + dispatch.
-                self._client._read_responses()
-            else:
-                # Legacy fallback (no client wired) — read and discard.
-                # This branch should not be hit anymore; it's kept only
-                # to avoid a hard crash if some caller constructs the
-                # worker without a client.
-                logger.warning("LSPReaderWorker: no client wired; "
-                               "discarding stdout (LSP integration disabled).")
-                while self.process and self.process.poll() is None:
-                    data = self.process.stdout.read(4096)
-                    if not data:
-                        break
-        except Exception as e:
-            logger.error(f"LSP reader error: {e}")
-        finally:
-            self.finished.emit()
+__all__ = [
+    "LSPClient",
+    "LSPMethod",
+    "CompletionItem",
+    "HoverInfo",
+    "Location",
+    "Diagnostic",
+]

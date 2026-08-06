@@ -2116,3 +2116,76 @@ class ClewBridge:
             return {"ok": True, "mode": get_auto_router().get_mode()}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    # --------------------------------------------------------- launch TUI
+    def launch_tui(self) -> Dict[str, Any]:
+        """Launch the Clew TUI in a new terminal window.
+        This is called from the Web UI when the user clicks 'Open in Terminal'.
+        """
+        try:
+            import subprocess
+            import sys
+            import os
+
+            # Get the current workspace
+            workspace = self.workspace
+
+            # Determine the command to launch TUI
+            # Use the same Python interpreter that's running this process
+            python_exe = sys.executable
+
+            # Try to find clew_tui entry point
+            # First try: clew_tui command (if installed)
+            # Second try: python -m clew_tui
+            # Third try: direct module execution
+            cmd = [python_exe, "-m", "clew_tui"]
+
+            # On macOS, use osascript to open a new Terminal window
+            if sys.platform == "darwin":
+                # Build the command string for the new terminal
+                # We need to activate the virtual environment if there is one
+                venv_path = os.environ.get("VIRTUAL_ENV")
+                if venv_path:
+                    activate_cmd = f"source {venv_path}/bin/activate && "
+                else:
+                    activate_cmd = ""
+
+                # Change to workspace directory and run clew_tui
+                terminal_cmd = f'cd "{workspace}" && {activate_cmd}{" ".join(cmd)}'
+
+                # Use osascript to open a new Terminal window
+                applescript = f'''
+                tell application "Terminal"
+                    do script "{terminal_cmd}"
+                    activate
+                end tell
+                '''
+                subprocess.Popen(["osascript", "-e", applescript], start_new_session=True)
+            elif sys.platform == "linux":
+                # Try common terminal emulators on Linux
+                terminals = [
+                    ["gnome-terminal", "--", "bash", "-c", f"cd '{workspace}' && {' '.join(cmd)}; exec bash"],
+                    ["konsole", "-e", "bash", "-c", f"cd '{workspace}' && {' '.join(cmd)}; exec bash"],
+                    ["xterm", "-e", "bash", "-c", f"cd '{workspace}' && {' '.join(cmd)}; exec bash"],
+                    ["alacritty", "-e", "bash", "-c", f"cd '{workspace}' && {' '.join(cmd)}; exec bash"],
+                    ["kitty", "-e", "bash", "-c", f"cd '{workspace}' && {' '.join(cmd)}; exec bash"],
+                ]
+                launched = False
+                for term_cmd in terminals:
+                    try:
+                        subprocess.Popen(term_cmd, start_new_session=True)
+                        launched = True
+                        break
+                    except FileNotFoundError:
+                        continue
+                if not launched:
+                    return {"ok": False, "error": "No supported terminal emulator found. Please install gnome-terminal, konsole, xterm, alacritty, or kitty."}
+            elif sys.platform == "win32":
+                # Windows: use start cmd
+                subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", f"cd /d \"{workspace}\" && {' '.join(cmd)}"], start_new_session=True)
+            else:
+                return {"ok": False, "error": f"Unsupported platform: {sys.platform}"}
+
+            return {"ok": True, "message": "TUI launched in new terminal window"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}

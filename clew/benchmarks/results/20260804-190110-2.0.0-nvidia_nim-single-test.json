@@ -1,0 +1,65 @@
+{
+  "started_at": "2026-08-04T19:00:48.856267+00:00",
+  "finished_at": "2026-08-04T19:01:10.235387+00:00",
+  "clew_version": "2.0.0",
+  "config": {
+    "provider": "nvidia_nim",
+    "model": "meta/llama-3.1-8b-instruct",
+    "max_iterations": 8,
+    "max_time_s": 300.0,
+    "dry_run": false,
+    "mock_provider": false,
+    "guardian_level": "off",
+    "autonomy": "never_ask",
+    "task_filter": [
+      "general_bug_fix_add"
+    ],
+    "section_filter": null,
+    "tag": "single-test"
+  },
+  "total_tasks": 1,
+  "passed": 0,
+  "failed": 1,
+  "errored": 0,
+  "skipped": 0,
+  "total_cost_usd": 0.1276,
+  "total_tokens_in": 41257,
+  "total_tokens_out": 253,
+  "total_wall_clock_s": 21.378410458011786,
+  "results": [
+    {
+      "task_id": "general_bug_fix_add",
+      "section": "general",
+      "difficulty": "easy",
+      "passed": false,
+      "reason": "one or more criteria failed",
+      "wall_clock_s": 21.376,
+      "tool_call_count": 0,
+      "tokens_in": 41257,
+      "tokens_out": 253,
+      "cost_usd": 0.1276,
+      "iterations": 8,
+      "provider": "nvidia_nim",
+      "model": "meta/llama-3.1-8b-instruct",
+      "checked_criteria": [
+        {
+          "name": "calc.py exists",
+          "passed": true
+        },
+        {
+          "name": "add() still defined",
+          "passed": true
+        },
+        {
+          "name": "bug (return a - b) removed",
+          "passed": false
+        },
+        {
+          "name": "add(2, 3) == 5",
+          "passed": false
+        }
+      ],
+      "error": null
+    }
+  ]
+}

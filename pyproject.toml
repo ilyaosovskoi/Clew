@@ -4,15 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clew"
-version = "2.1.0"
+version = "2.2.0"
 description = """\
-Clew v2.1.0 — Native, local-first AI IDE with multi-provider support, MCP,
+Clew v2.2.0 — Native, local-first AI IDE with multi-provider support, MCP,
 multi-agent Heavy Code mode, Office Worker section, headless CLI, optional
 Rust native acceleration (sandbox / circuit breaker / compaction / interjection),
 v2 agent runtime (asyncio ChatStateActor + three-tier compaction + sub-agent
 v2 with toolset-level read-only guarantee), multi-provider consensus engine
-(G15), signed Ed25519 audit trail (G16), automatic learning loop (G17), and
-web search/fetch with a read-only 'researcher' subagent role (G18)."""
+(G15), signed Ed25519 audit trail (G16), automatic learning loop (G17),
+web search/fetch with a read-only 'researcher' subagent role (G18), and a
+browser-based Web UI served by a plain HTTP server (replaces the legacy
+PySide6 / QWebEngineView desktop GUI)."""
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
@@ -35,15 +37,13 @@ classifiers = [
     "Programming Language :: Rust",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: POSIX :: Linux",
-    "Environment :: MacOS X",
-    "Environment :: X11 Applications :: Qt",
+    "Environment :: Web Environment",
 ]
 requires-python = ">=3.11"
 
 dependencies = [
-    # Core UI — Qt hosts the HTML frontend via QWebEngineView.
-    "PySide6>=6.6.0",
-    "PySide6-Addons>=6.6.0",
+    # v2.2.0: GUI is served by a plain HTTP server (clew.web_server).
+    # No Qt / PySide6 dependency — point a browser at the printed URL.
     # Utils
     "pydantic>=2.7.0",
     "toml>=0.10.2",
@@ -60,10 +60,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-macos = [
-    # Needed for the transparent-titlebar native window styling.
-    "pyobjc-framework-Cocoa>=10.0",
-]
+# v2.2.0: the macOS optional group is now empty — the transparent-titlebar
+# styling was a Qt/Cocoa feature that no longer applies. Kept as an empty
+# list so existing `pip install clew[macos]` invocations don't error.
+macos = []
 # v2.0: optional Rust native acceleration. When installed (via maturin),
 # `clew_native` extension is available and used automatically by
 # `clew.agent.native`. Without it, pure-Python fallbacks are used.
@@ -76,10 +76,8 @@ native = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
-    "pytest-qt>=4.2",
     "black>=24.0",
     "mypy>=1.10",
-    "py2app>=0.28",   # for .dmg builds on macOS
     # v2.0: for building the Rust native extension.
     "maturin>=1.7.0",
 ]
@@ -113,22 +111,16 @@ clew = [
     "agent/templates/*",
 ]
 
-# ── py2app configuration for .dmg builds ────────────────────────────────
-[tool.py2app]
-app = ["clew/__main__.py"]
-iconfile = "assets/logo.icns"
-bundle-identifier = "io.clew.app"
-name = "Clew"
-version = "2.1.0"
-# py2app tends to over-package. These excludes drop ~600 MB of unused deps.
-excludes = [
-    "tkinter", "test", "tests", "unittest",
-    "PyQt5", "PyQt6", "PySide2",
-    "matplotlib", "numpy.testing",
-    "IPython", "notebook", "jupyter",
-]
-includes = [
-    "PySide6", "shiboken6",
-]
-resources = ["assets", "clew/web"]
-plist-file = "Info.plist"
+# ── py2app configuration for .dmg builds (DISABLED in v2.2.0) ───────────
+# The Qt / PySide6 desktop GUI was removed in v2.2.0 — py2app packaging
+# is no longer applicable. The Web UI ships as plain HTML/CSS/JS served
+# by clew.web_server, so no special packaging is needed.
+# [tool.py2app]
+# app = ["clew/__main__.py"]
+# iconfile = "assets/logo.icns"
+# bundle-identifier = "io.clew.app"
+# name = "Clew"
+# version = "2.2.0"
+# excludes = ["tkinter", "test", "tests", "unittest"]
+# resources = ["assets", "clew/web"]
+# plist-file = "Info.plist"

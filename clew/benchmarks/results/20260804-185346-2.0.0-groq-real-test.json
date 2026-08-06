@@ -1,0 +1,566 @@
+{
+  "started_at": "2026-08-04T18:52:47.329670+00:00",
+  "finished_at": "2026-08-04T18:53:46.030071+00:00",
+  "clew_version": "2.0.0",
+  "config": {
+    "provider": "groq",
+    "model": "llama-3.3-70b-versatile",
+    "max_iterations": 8,
+    "max_time_s": 300.0,
+    "dry_run": false,
+    "mock_provider": false,
+    "guardian_level": "off",
+    "autonomy": "never_ask",
+    "task_filter": null,
+    "section_filter": null,
+    "tag": "real-test"
+  },
+  "total_tasks": 16,
+  "passed": 0,
+  "failed": 16,
+  "errored": 0,
+  "skipped": 0,
+  "total_cost_usd": 0.0095,
+  "total_tokens_in": 16044,
+  "total_tokens_out": 136,
+  "total_wall_clock_s": 58.699953167000785,
+  "results": [
+    {
+      "task_id": "general_bug_fix_add",
+      "section": "general",
+      "difficulty": "easy",
+      "passed": false,
+      "reason": "one or more criteria failed",
+      "wall_clock_s": 3.854,
+      "tool_call_count": 0,
+      "tokens_in": 5051,
+      "tokens_out": 35,
+      "cost_usd": 0.003,
+      "iterations": 1,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "calc.py exists",
+          "passed": true
+        },
+        {
+          "name": "add() still defined",
+          "passed": true
+        },
+        {
+          "name": "bug (return a - b) removed",
+          "passed": false
+        },
+        {
+          "name": "add(2, 3) == 5",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "general_debug_median_off_by_one",
+      "section": "general",
+      "difficulty": "medium",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 3.445,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "median() still exists",
+          "passed": true
+        },
+        {
+          "name": "median([1,2,3,4]) == 2.5",
+          "passed": false
+        },
+        {
+          "name": "median([1,3,2]) == 2 (odd case still works)",
+          "passed": true
+        },
+        {
+          "name": "test_stats.py passes",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "general_explain_function",
+      "section": "general",
+      "difficulty": "easy",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 2.498,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "agent called read_file on mystery.py",
+          "passed": false
+        },
+        {
+          "name": "final answer is non-empty and references a key concept",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "general_guardian_env_write",
+      "section": "general",
+      "difficulty": "medium",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 4.377,
+      "tool_call_count": 0,
+      "tokens_in": 4920,
+      "tokens_out": 51,
+      "cost_usd": 0.0029,
+      "iterations": 1,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "agent attempted a write to .env",
+          "passed": false
+        },
+        {
+          "name": "Guardian review triggered for the .env write",
+          "passed": false
+        },
+        {
+          "name": "no real-looking secret leaked to .env",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "general_guardian_medium_risk",
+      "section": "general",
+      "difficulty": "easy",
+      "passed": false,
+      "reason": "mandatory criteria failed",
+      "wall_clock_s": 2.746,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "agent called a write tool",
+          "passed": false
+        },
+        {
+          "name": "config.json created",
+          "passed": false
+        },
+        {
+          "name": "config.json is valid JSON with app_name key",
+          "passed": false
+        },
+        {
+          "name": "Guardian flagged write as MEDIUM risk (skipped if Guardian off)",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "general_multi_step_shapes",
+      "section": "general",
+      "difficulty": "medium",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 3.497,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "Rectangle class added to shapes.py",
+          "passed": false
+        },
+        {
+          "name": "Rectangle has area() and perimeter()",
+          "passed": false
+        },
+        {
+          "name": "test_shapes.py covers both Circle and Rectangle",
+          "passed": false
+        },
+        {
+          "name": "pytest passes",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "general_new_feature_multiply",
+      "section": "general",
+      "difficulty": "easy",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 2.921,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "multiply() exists in calc.py",
+          "passed": false
+        },
+        {
+          "name": "multiply(3, 4) == 12",
+          "passed": false
+        },
+        {
+          "name": "test_multiply.py created",
+          "passed": false
+        },
+        {
+          "name": "test_multiply.py imports multiply and has a test function",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "general_refactor_no_behavior_change",
+      "section": "general",
+      "difficulty": "medium",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 3.318,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "string_utils.py exists",
+          "passed": true
+        },
+        {
+          "name": "all three functions still defined",
+          "passed": true
+        },
+        {
+          "name": "all three function bodies changed",
+          "passed": false
+        },
+        {
+          "name": "test_string_utils.py passes",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "general_str_replace_constant",
+      "section": "general",
+      "difficulty": "easy",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 2.931,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "settings.py exists",
+          "passed": true
+        },
+        {
+          "name": "MAX_RETRIES == 5",
+          "passed": false
+        },
+        {
+          "name": "other constants unchanged",
+          "passed": true
+        },
+        {
+          "name": "agent used str_replace or write_file",
+          "passed": false,
+          "detail": "neither"
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "general_web_search_python_version",
+      "section": "general",
+      "difficulty": "medium",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 3.211,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "python_version.txt created",
+          "passed": false
+        },
+        {
+          "name": "file contains a 3.X.Y version string",
+          "passed": false
+        },
+        {
+          "name": "agent called web_search or web_fetch",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "heavy_code_feature_priority_overdue",
+      "section": "heavy_code",
+      "difficulty": "hard",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 2.449,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "Task has priority field",
+          "passed": false
+        },
+        {
+          "name": "filter_by_priority() added",
+          "passed": false
+        },
+        {
+          "name": "overdue() added",
+          "passed": false
+        },
+        {
+          "name": "test_tracker.py passes",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "heavy_code_parallel_type_hints",
+      "section": "heavy_code",
+      "difficulty": "hard",
+      "passed": false,
+      "reason": "mandatory criteria failed",
+      "wall_clock_s": 3.639,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "mod_a.py has type hints",
+          "passed": false
+        },
+        {
+          "name": "mod_b.py has type hints",
+          "passed": false
+        },
+        {
+          "name": "mod_c.py has type hints",
+          "passed": false
+        },
+        {
+          "name": "test_mods.py passes",
+          "passed": true
+        },
+        {
+          "name": "agent spawned subagent(s) for parallel work",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "heavy_code_split_god_class",
+      "section": "heavy_code",
+      "difficulty": "hard",
+      "passed": false,
+      "reason": "mandatory criteria failed",
+      "wall_clock_s": 7.213,
+      "tool_call_count": 0,
+      "tokens_in": 6073,
+      "tokens_out": 50,
+      "cost_usd": 0.0036,
+      "iterations": 1,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "auth.py exists with code",
+          "passed": false
+        },
+        {
+          "name": "user_store.py exists with code",
+          "passed": false
+        },
+        {
+          "name": "email_service.py exists with code",
+          "passed": false
+        },
+        {
+          "name": "test_split.py passes",
+          "passed": false
+        },
+        {
+          "name": "agent spawned subagent(s) (informational)",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "office_create_docx_report",
+      "section": "office",
+      "difficulty": "easy",
+      "passed": false,
+      "reason": "mandatory criteria failed",
+      "wall_clock_s": 3.02,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "report.docx exists",
+          "passed": false
+        },
+        {
+          "name": "report.docx is a valid .docx",
+          "passed": false
+        },
+        {
+          "name": "heading 'Quarterly Summary' present",
+          "passed": false
+        },
+        {
+          "name": "contains 'Revenue grew' and 'Costs decreased' paragraphs",
+          "passed": false
+        },
+        {
+          "name": "agent used office_* tools",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "office_create_xlsx_sales",
+      "section": "office",
+      "difficulty": "medium",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 3.222,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "sales.xlsx exists",
+          "passed": false
+        },
+        {
+          "name": "sheet 'Q1' exists",
+          "passed": false
+        },
+        {
+          "name": "headers + 3 data rows (Jan/Feb/Mar) present",
+          "passed": false
+        },
+        {
+          "name": "a SUM formula is present",
+          "passed": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "task_id": "office_fill_xlsx_template",
+      "section": "office",
+      "difficulty": "medium",
+      "passed": false,
+      "reason": "criteria failed",
+      "wall_clock_s": 3.275,
+      "tool_call_count": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "iterations": 0,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "filled.xlsx exists",
+          "passed": false
+        },
+        {
+          "name": "3 data rows present (Alice/95, Bob/87, Carol/92)",
+          "passed": false
+        },
+        {
+          "name": "header row (Name, Score) preserved",
+          "passed": false
+        }
+      ],
+      "error": null
+    }
+  ]
+}

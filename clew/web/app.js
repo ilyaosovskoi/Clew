@@ -47,21 +47,47 @@ const state = {
 };
 
 const PROVIDER_META = {
+  // ── Local (no key) ───────────────────────────────────────────────
   lmstudio:   { label:'LM Studio', model:'',                              needsKey:false, statusLabel:'LM Studio',         modelDisplay:'LM Studio', keyHint:'Download LM Studio, load a model, and start its local server — no account or key needed.', keyUrl:'https://lmstudio.ai' },
-  openrouter: { label:'OpenRouter', model:'anthropic/claude-sonnet-4.6', needsKey:true,  statusLabel:'OpenRouter · Claude Sonnet 4.6', modelDisplay:'Claude Sonnet 4.6', keyHint:'One key, access to almost every model. Free credits for new accounts.', keyUrl:'https://openrouter.ai/keys' },
-  groq:       { label:'Groq',       model:'meta-llama/llama-4-maverick-17b-128e-instruct', needsKey:true,  statusLabel:'Groq · Llama 4 Maverick', modelDisplay:'Llama 4 Maverick', keyHint:'Generous free tier, extremely fast responses. Good default for quick tasks.', keyUrl:'https://console.groq.com/keys' },
+  ollama:     { label:'Ollama',     model:'llama3.3',                    needsKey:false, statusLabel:'Ollama · Llama 3.3',       modelDisplay:'Llama 3.3', keyHint:'Install Ollama and pull a model — runs fully on your machine, no key needed.', keyUrl:'https://ollama.com/download' },
+  vllm:       { label:'vLLM',       model:'meta-llama/Meta-Llama-3.1-8B-Instruct', needsKey:false, statusLabel:'vLLM · Llama 3.1 8B', modelDisplay:'Llama 3.1 8B', keyHint:'Self-hosted OpenAI-compatible server. Set CLEW_VLLM_BASE_URL env var to point at your server.', keyUrl:'https://docs.vllm.ai' },
+  koboldcpp:  { label:'KoboldCpp',  model:'local-model',                 needsKey:false, statusLabel:'KoboldCpp · Local',        modelDisplay:'KoboldCpp local', keyHint:'Local GGUF server with an OpenAI-compatible API. Start KoboldCpp and load any model.', keyUrl:'https://github.com/LostRuins/koboldcpp' },
+  llamafile:  { label:'llamafile',  model:'local-model',                 needsKey:false, statusLabel:'llamafile · Local',        modelDisplay:'llamafile local', keyHint:'Mozilla\'s single-file LLM runner. Start with --server and load any .llamafile.', keyUrl:'https://github.com/Mozilla-Ocho/llamafile' },
+  // ── Major cloud providers ────────────────────────────────────────
   openai:     { label:'OpenAI',     model:'gpt-5.5',                      needsKey:true,  statusLabel:'OpenAI · GPT-5.5',         modelDisplay:'GPT-5.5', keyHint:'Requires billing set up on your OpenAI account before keys work.', keyUrl:'https://platform.openai.com/api-keys' },
   anthropic:  { label:'Anthropic',  model:'claude-sonnet-5',              needsKey:true,  statusLabel:'Anthropic · Sonnet 5',    modelDisplay:'Claude Sonnet 5', keyHint:'Best for coding/agentic tasks. Requires billing set up on your account.', keyUrl:'https://console.anthropic.com/settings/keys' },
+  gemini:     { label:'Google Gemini', model:'gemini-3.1-pro',           needsKey:true,  statusLabel:'Gemini · 3.1 Pro',           modelDisplay:'Gemini 3.1 Pro', keyHint:'Free tier available through Google AI Studio.', keyUrl:'https://aistudio.google.com/apikey' },
   deepseek:   { label:'DeepSeek',   model:'deepseek-v4-pro',             needsKey:true,  statusLabel:'DeepSeek · V4 Pro',        modelDisplay:'DeepSeek V4 Pro', keyHint:'Low-cost, strong coding performance.', keyUrl:'https://platform.deepseek.com/api_keys' },
   zai:        { label:'Z.ai',       model:'glm-5.1',                      needsKey:true,  statusLabel:'Z.ai · GLM-5.1',            modelDisplay:'GLM-5.1', keyHint:'Some GLM models are free to use on the API.', keyUrl:'https://z.ai/manage-apikey/apikey-list' },
-  gemini:     { label:'Gemini',     model:'gemini-3.1-pro',               needsKey:true,  statusLabel:'Gemini · 3.1 Pro',           modelDisplay:'Gemini 3.1 Pro', keyHint:'Free tier available through Google AI Studio.', keyUrl:'https://aistudio.google.com/apikey' },
   mistral:    { label:'Mistral',    model:'mistral-large-latest',        needsKey:true,  statusLabel:'Mistral · Large 3',          modelDisplay:'Mistral Large 3', keyHint:'European provider; free tier for experimentation.', keyUrl:'https://console.mistral.ai/api-keys' },
-  together:   { label:'Together AI',model:'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8', needsKey:true, statusLabel:'Together · Llama 4 Maverick', modelDisplay:'Llama 4 Maverick', keyHint:'Wide catalog of open-source models.', keyUrl:'https://api.together.ai/settings/api-keys' },
-  fireworks:  { label:'Fireworks', model:'accounts/fireworks/models/llama4-maverick-instruct-basic', needsKey:true, statusLabel:'Fireworks · Llama 4 Maverick', modelDisplay:'Llama 4 Maverick', keyHint:'Fast hosted inference for open models.', keyUrl:'https://app.fireworks.ai/settings/users/api-keys' },
   xai:        { label:'xAI',        model:'grok-4.3',                    needsKey:true,  statusLabel:'xAI · Grok 4.3',            modelDisplay:'Grok 4.3', keyHint:'Grok models from xAI.', keyUrl:'https://console.x.ai' },
+  cohere:     { label:'Cohere',     model:'command-r-plus-08-2024',      needsKey:true,  statusLabel:'Cohere · Command R+',      modelDisplay:'Command R+', keyHint:'Strong on RAG and multilingual. Free trial keys available.', keyUrl:'https://dashboard.cohere.com/api-keys' },
+  perplexity: { label:'Perplexity', model:'llama-3.1-sonar-large-128k-online', needsKey:true, statusLabel:'Perplexity · Sonar Large', modelDisplay:'Sonar Large (online)', keyHint:'Online models with built-in web search. API key on Perplexity settings page.', keyUrl:'https://www.perplexity.ai/settings/api' },
+  ai21:       { label:'AI21 Labs',  model:'jamba-1.6-large',             needsKey:true,  statusLabel:'AI21 · Jamba 1.6 Large',   modelDisplay:'Jamba 1.6 Large', keyHint:'SSM-Transformer hybrid, very long context. Free tier available.', keyUrl:'https://studio.ai21.com/account/api-key' },
+  // ── Fast inference (open models hosted) ──────────────────────────
+  groq:       { label:'Groq',       model:'meta-llama/llama-4-maverick-17b-128e-instruct', needsKey:true,  statusLabel:'Groq · Llama 4 Maverick', modelDisplay:'Llama 4 Maverick', keyHint:'Generous free tier, extremely fast responses. Good default for quick tasks.', keyUrl:'https://console.groq.com/keys' },
   cerebras:   { label:'Cerebras',   model:'llama-4-scout-17b-16e-instruct', needsKey:true,  statusLabel:'Cerebras · Llama 4 Scout',  modelDisplay:'Llama 4 Scout', keyHint:'Free tier; the fastest inference speeds available anywhere.', keyUrl:'https://cloud.cerebras.ai' },
   sambanova:  { label:'SambaNova',  model:'Meta-Llama-4-Maverick-17B-128E-Instruct', needsKey:true,  statusLabel:'SambaNova · Llama 4 Maverick', modelDisplay:'Llama 4 Maverick', keyHint:'Free tier with no credit card required.', keyUrl:'https://cloud.sambanova.ai/apis' },
-  ollama:     { label:'Ollama',     model:'llama3.3',                    needsKey:false, statusLabel:'Ollama · Llama 3.3',       modelDisplay:'Llama 3.3', keyHint:'Install Ollama and pull a model — runs fully on your machine, no key needed.', keyUrl:'https://ollama.com/download' },
+  // ── Open-model hosting / aggregators ─────────────────────────────
+  openrouter: { label:'OpenRouter', model:'anthropic/claude-sonnet-4.6', needsKey:true,  statusLabel:'OpenRouter · Claude Sonnet 4.6', modelDisplay:'Claude Sonnet 4.6', keyHint:'One key, access to almost every model. Free credits for new accounts.', keyUrl:'https://openrouter.ai/keys' },
+  together:   { label:'Together AI',model:'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8', needsKey:true, statusLabel:'Together · Llama 4 Maverick', modelDisplay:'Llama 4 Maverick', keyHint:'Wide catalog of open-source models.', keyUrl:'https://api.together.ai/settings/api-keys' },
+  fireworks:  { label:'Fireworks',  model:'accounts/fireworks/models/llama4-maverick-instruct-basic', needsKey:true, statusLabel:'Fireworks · Llama 4 Maverick', modelDisplay:'Llama 4 Maverick', keyHint:'Fast hosted inference for open models.', keyUrl:'https://app.fireworks.ai/settings/users/api-keys' },
+  novita:     { label:'Novita AI',  model:'meta-llama/llama-3.1-70b-instruct', needsKey:true, statusLabel:'Novita · Llama 3.1 70B', modelDisplay:'Llama 3.1 70B', keyHint:'Cheap hosted open models. Free trial credits for new accounts.', keyUrl:'https://novita.ai/get-key' },
+  hyperbolic: { label:'Hyperbolic', model:'meta-llama/Meta-Llama-3.1-70B-Instruct', needsKey:true, statusLabel:'Hyperbolic · Llama 3.1 70B', modelDisplay:'Llama 3.1 70B', keyHint:'Low-cost GPU inference for open models.', keyUrl:'https://app.hyperbolic.xyz/settings' },
+  lepton:     { label:'Lepton AI',  model:'llama3-8b',                   needsKey:true,  statusLabel:'Lepton · Llama 3 8B',       modelDisplay:'Llama 3 8B', keyHint:'Serverless open-model inference.', keyUrl:'https://dashboard.lepton.ai/tokens' },
+  siliconflow:{ label:'SiliconFlow',model:'Qwen/Qwen2.5-72B-Instruct',   needsKey:true,  statusLabel:'SiliconFlow · Qwen 2.5 72B', modelDisplay:'Qwen 2.5 72B', keyHint:'Chinese aggregator with many open models. Free tier.', keyUrl:'https://cloud.siliconflow.cn/account/ak' },
+  friendli:   { label:'Friendli AI',model:'meta-llama-3.1-8b-instruct',  needsKey:true,  statusLabel:'Friendli · Llama 3.1 8B',   modelDisplay:'Llama 3.1 8B', keyHint:'High-throughput inference engine for open models.', keyUrl:'https://friendli.ai/webapp-api-keys' },
+  // ── ML platforms / model hubs ────────────────────────────────────
+  huggingface:{ label:'Hugging Face', model:'meta-llama/Meta-Llama-3.1-8B-Instruct', needsKey:true, statusLabel:'HF · Llama 3.1 8B', modelDisplay:'Llama 3.1 8B', keyHint:'Inference Endpoints / serverless API. Free tier with HF account.', keyUrl:'https://huggingface.co/settings/tokens' },
+  replicate:  { label:'Replicate',  model:'meta/llama-3.1-8b-instruct',  needsKey:true,  statusLabel:'Replicate · Llama 3.1 8B',  modelDisplay:'Llama 3.1 8B', keyHint:'Per-second billing for open models. Free trial credit.', keyUrl:'https://replicate.com/account/api-tokens' },
+  // ── Enterprise cloud ─────────────────────────────────────────────
+  azure_openai: { label:'Azure OpenAI', model:'gpt-5',                  needsKey:true,  statusLabel:'Azure · GPT-5',            modelDisplay:'Azure GPT-5', keyHint:'Set CLEW_AZURE_OPENAI_ENDPOINT + CLEW_AZURE_OPENAI_API_KEY env vars. Your own Azure deployment of OpenAI models.', keyUrl:'https://learn.microsoft.com/azure/ai-services/openai' },
+  vertex_ai:    { label:'Vertex AI',    model:'gemini-3.1-pro',         needsKey:true,  statusLabel:'Vertex · Gemini 3.1 Pro',  modelDisplay:'Vertex Gemini 3.1 Pro', keyHint:'Google Cloud Vertex AI. Uses Application Default Credentials (gcloud auth application-default login).', keyUrl:'https://console.cloud.google.com/vertex-ai' },
+  bedrock:      { label:'AWS Bedrock',  model:'anthropic.claude-sonnet-5-v1:0', needsKey:true, statusLabel:'Bedrock · Claude Sonnet 5', modelDisplay:'Bedrock Claude Sonnet 5', keyHint:'Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY env vars. Uses boto3 client.', keyUrl:'https://console.aws.amazon.com/bedrock' },
+  // ── Nvidia NIM ───────────────────────────────────────────────────
+  nvidia_nim: { label:'Nvidia NIM', model:'meta/llama-3.1-8b-instruct', needsKey:true, statusLabel:'Nvidia NIM · Llama 3.1 8B', modelDisplay:'NIM Llama 3.1 8B', keyHint:'Get a free key at build.nvidia.com — covers Llama, Mistral, Nemotron hosted by Nvidia.', keyUrl:'https://build.nvidia.com' },
+  // ── Generic fallback ─────────────────────────────────────────────
+  openai_compat: { label:'OpenAI-compatible (custom)', model:'gpt-3.5-turbo', needsKey:true, statusLabel:'Custom · OpenAI-compat', modelDisplay:'Custom OpenAI-compat', keyHint:'Any endpoint exposing POST /v1/chat/completions. Use the Custom Providers wizard in Settings → Providers to configure base URL + key.', keyUrl:'#' },
 };
 
 const DEFAULT_TEMPLATES = [
@@ -2265,17 +2291,47 @@ document.getElementById('ragBtn').addEventListener('click',async()=>{
   }catch(e){toast('RAG failed: '+e.message,'error');composerStatus.textContent='Ready'}
 });
 
-// v2.0.0-tui: Launch TUI button — opens clew_tui in a new terminal window
-document.getElementById('launchTuiBtn').addEventListener('click',()=>{
-  if(!isBackendAvailable()){toast('Backend not connected — cannot launch TUI','error');return}
-  try{
-    const result=window.bridge.launch_tui();
-    if(result.success){
-      toast('TUI launched in a new terminal window','success');
-    }else{
-      toast('Failed to launch TUI: '+result.error,'error');
+// v2.0.0-tui: Launch TUI button — opens clew_tui in a new terminal window and closes the GUI
+document.getElementById('launchTuiBtn').addEventListener('click', async () => {
+  if (!isBackendAvailable()) {
+    toast('Backend not connected — cannot launch TUI', 'error');
+    return;
+  }
+  try {
+    toast('Launching TUI in a new terminal window...', 'info');
+    const result = await callBridge('launch_tui');
+    if (result.ok) {
+      toast('TUI launched — closing GUI', 'success');
+      // Try to close the window immediately (works if opened by script)
+      window.close();
+      // If window.close() didn't work (typical for user-opened tabs),
+      // immediately replace content with a "GUI closed" message
+      setTimeout(() => {
+        if (!window.closed) {
+          document.body.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center;padding:24px;font-family:Inter,system-ui,sans-serif;background:var(--bg-primary);color:var(--text-primary)">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" style="color:var(--success);margin-bottom:16px">
+                <rect x="1" y="2" width="22" height="20" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M7 10l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <h2 style="margin:0 0 8px;font-size:24px">TUI Launched</h2>
+              <p style="color:var(--text-secondary);margin:0 0 24px;font-size:14px">
+                The Clew TUI has been opened in a new terminal window.<br>
+                This browser tab can now be closed.
+              </p>
+              <button onclick="window.close()" class="btn btn-primary" style="padding:10px 24px;font-size:14px;background:var(--success);color:#000;border:none;border-radius:var(--r-input);cursor:pointer">
+                Close This Tab
+              </button>
+            </div>
+          `;
+        }
+      }, 100);
+    } else {
+      toast('Failed to launch TUI: ' + (result.error || 'Unknown error'), 'error');
     }
-  }catch(e){toast('Failed to launch TUI: '+e.message,'error')}
+  } catch (e) {
+    toast('Failed to launch TUI: ' + e.message, 'error');
+  }
 });
 
 // Settings modal
@@ -2730,10 +2786,120 @@ async function renderSettingsTab(tab){
   const footer=document.getElementById('modalFooter');
   if(tab==='appearance'){footer.style.display='none';body.innerHTML='';renderAppearanceTab(body)}
   else if(tab==='providers'){footer.style.display='';body.innerHTML='';await renderProvidersTab(body)}
+  else if(tab==='tools'){footer.style.display='none';body.innerHTML='';await renderToolsTab(body)}
   else if(tab==='agent'){footer.style.display='none';body.innerHTML='';await renderAgentTab(body)}
       else if(tab==='project'){footer.style.display='none';body.innerHTML='';await renderProjectTab(body)}
       else if(tab==='snippets'){footer.style.display='none';body.innerHTML='';await renderSnippetsTab(body)}
   else if(tab==='about'){footer.style.display='none';body.innerHTML='';await renderAboutTab(body)}
+}
+
+/* ===================================================================
+   v2.2.3 — Tools tab inside Settings
+   ===================================================================
+   Replaces the old sidebar Tools section. Renders a grid of tool
+   cards; clicking a card renders that tool's content directly inside
+   the Settings modal body, using the RENDERERS exported by
+   tools_panels.js. A "← Back to Tools" button at the top returns to
+   the grid view.                                                  */
+async function renderToolsTab(body){
+  // If a sub-tool was previously selected, clear it so we always land
+  // on the grid view when the user clicks the Tools tab.
+  state.__toolsSubTab = null;
+  await _renderToolsGrid(body);
+}
+
+async function _renderToolsGrid(body){
+  const meta = window.__clewToolMeta || {};
+  const renderers = window.__clewToolsRenderers || {};
+  // Categorize tools so the grid reads better than a flat 17-card list.
+  const groups = [
+    { title: 'Agent runtime', tools: ['capabilities','hooks','checkpoints','handoffs','learnings','persona'] },
+    { title: 'Code & collaboration', tools: ['github','github_actions','consensus','second_opinion','verify'] },
+    { title: 'Operations', tools: ['audit','spend','notify','daemon'] },
+    { title: 'Extensions', tools: ['mcp_server','providers'] },
+  ];
+  const icons = {
+    capabilities:   '<path d="M3 2.5h10A1.5 1.5 0 0 1 14.5 4v8A1.5 1.5 0 0 1 13 13.5H3A1.5 1.5 0 0 1 1.5 12V4A1.5 1.5 0 0 1 3 2.5Z" stroke="currentColor" stroke-width="1.2"/><path d="M4 5.5h8M4 8h8M4 10.5h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
+    hooks:          '<path d="M5 2.5h6v3a3 3 0 0 1-6 0V2.5Z" stroke="currentColor" stroke-width="1.2"/><path d="M5 4H3a1 1 0 0 0-1 1v3a2 2 0 0 0 2 2h2M11 4h2a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
+    checkpoints:    '<path d="M3 8a5 5 0 1 0 1.5-3.5L3 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M3 3v3h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>',
+    handoffs:       '<path d="M2.5 4h6v6h-6zM8.5 6.5h5V14h-5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M5 14h7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
+    github:         '<path d="M8 1.5A6.5 6.5 0 0 0 5.93 14c.33.06.45-.14.45-.32v-1.13c-1.83.4-2.22-.88-2.22-.88-.3-.76-.73-.96-.73-.96-.6-.4.04-.4.04-.4.66.05 1 .68 1 .68.59 1 1.55.72 1.93.55.06-.43.23-.72.42-.88-1.47-.17-3.01-.74-3.01-3.27 0-.72.26-1.31.68-1.78-.07-.17-.3-.84.07-1.75 0 0 .56-.18 1.82.68a6.3 6.3 0 0 1 3.3 0c1.26-.86 1.82-.68 1.82-.68.37.91.14 1.58.07 1.75.42.47.68 1.06.68 1.78 0 2.54-1.55 3.1-3.02 3.26.24.2.45.62.45 1.25v1.85c0 .18.12.39.46.32A6.5 6.5 0 0 0 8 1.5Z" stroke="currentColor" stroke-width="1.0" stroke-linejoin="round"/>',
+    audit:          '<path d="M8 1.5L13.5 3.5V8c0 3-2.5 5.5-5.5 6.5C5 13.5 2.5 11 2.5 8V3.5L8 1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 8L7.5 9.5L10 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>',
+    spend:          '<path d="M2 8c0-3.3 2.7-6 6-6s6 2.7 6 6-2.7 6-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M8 4.5V8L10.5 9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/>',
+    consensus:      '<circle cx="4" cy="4" r="2.2" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="4" r="2.2" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="12" r="2.2" stroke="currentColor" stroke-width="1.2"/><path d="M5.7 5.2L7 10M10.3 5.2L9 10M5.5 4h5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>',
+    second_opinion: '<circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.2"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 7h4M7 5v4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>',
+    verify:         '<path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+    learnings:      '<path d="M3 3.5h6v6h-6zM9 5.5h4V13H9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M5 6.5h2M5 8h2M10.5 8.5h1.5M10.5 10.5h1.5" stroke="currentColor" stroke-width="1.0" stroke-linecap="round"/>',
+    github_actions: '<path d="M2 8h3l1.5-3 2 5 1.5-2h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>',
+    notify:         '<path d="M3 7a5 5 0 0 1 10 0v3l1.5 2H1.5L3 10V7Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 13a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
+    daemon:         '<rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M5 6h6M5 8.5h6M5 11h3" stroke="currentColor" stroke-width="1.0" stroke-linecap="round"/>',
+    mcp_server:     '<circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>',
+    persona:        '<circle cx="8" cy="6" r="2.5" stroke="currentColor" stroke-width="1.2"/><path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
+    providers:      '<path d="M2 5l2-2 4 4 4-4 2 2-4 4 4 4-2 2-4-4-4 4-2-2 4-4-4-4z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>',
+  };
+  let html = '<div class="settings-tools-intro">All backend capabilities previously on the sidebar — now collected here. Click any card to open its panel inside this window.</div>';
+  for(const g of groups){
+    html += '<div class="settings-tools-group"><div class="settings-tools-group-title">'+g.title+'</div><div class="settings-tools-grid">';
+    for(const id of g.tools){
+      const m = meta[id] || {title:id, subtitle:''};
+      const svgInner = icons[id] || '';
+      html += '<button class="settings-tool-card" data-tool="'+id+'">'+
+        '<div class="settings-tool-card-icon"><svg viewBox="0 0 16 16" fill="none">'+svgInner+'</svg></div>'+
+        '<div class="settings-tool-card-body">'+
+          '<div class="settings-tool-card-title">'+escapeHtml(m.title)+'</div>'+
+          '<div class="settings-tool-card-sub">'+escapeHtml(m.subtitle)+'</div>'+
+        '</div>'+
+        '<svg class="settings-tool-card-arrow" viewBox="0 0 14 14" fill="none"><path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+      '</button>';
+    }
+    html += '</div></div>';
+  }
+  // Add a hint about MCP and Custom Providers also being available elsewhere
+  html += '<div class="settings-tools-note">Tip: MCP server connections live under the <strong>MCP</strong> tab. Adding custom OpenAI-compatible endpoints lives under the <strong>Providers</strong> tab → Custom providers.</div>';
+  body.innerHTML = html;
+  body.querySelectorAll('.settings-tool-card').forEach(function(card){
+    card.addEventListener('click', async function(){
+      const id = card.dataset.tool;
+      if(!renderers[id]){ toast('Tool "'+id+'" not loaded yet','error'); return; }
+      state.__toolsSubTab = id;
+      // Render the sub-tool content inside the same modal body
+      body.innerHTML = '<div class="settings-tools-subheader">'+
+        '<button class="btn-secondary" id="toolsBackBtn">'+
+          '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M11 7H3M7 3L3 7l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+          'Back to Tools'+
+        '</button>'+
+        '<div class="settings-tools-subheader-title">'+escapeHtml((meta[id]||{}).title || id)+'</div>'+
+        '<button class="icon-btn" id="toolsSubRefresh" title="Refresh">'+
+          '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 0 1 10.5-4M14 8A6 6 0 0 1 3.5 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12 2v3h-3M4 14v-3h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+        '</button>'+
+      '</div>'+
+      '<div class="settings-tools-subbody" id="toolsSubBody">'+
+        '<div class="tools-loading">Loading…</div>'+
+      '</div>';
+      document.getElementById('toolsBackBtn').addEventListener('click', async function(){
+        state.__toolsSubTab = null;
+        await _renderToolsGrid(body);
+      });
+      document.getElementById('toolsSubRefresh').addEventListener('click', async function(){
+        await _renderToolsSub(body, id, meta, renderers);
+      });
+      await _renderToolsSub(body, id, meta, renderers);
+    });
+  });
+}
+
+async function _renderToolsSub(body, id, meta, renderers){
+  const subBody = document.getElementById('toolsSubBody');
+  if(!subBody) return;
+  subBody.innerHTML = '<div class="tools-loading">Loading…</div>';
+  try {
+    const fn = renderers[id];
+    if(!fn) throw new Error('No renderer for '+id);
+    await fn(subBody);
+  } catch(e){
+    console.error('[tools-tab] render error', e);
+    subBody.innerHTML = '<div class="tools-error">'+escapeHtml(e.message)+'</div>';
+  }
 }
 
 // v1.1.1: this tab did not exist before — get_agent_autonomy/
@@ -2935,7 +3101,59 @@ async function renderProvidersTab(body){
   const arClassEl=document.getElementById('arClassification');
   const updateArPreview=async()=>{const text=composerInput.value.trim();if(!text||!isBackendAvailable()){arClassEl.style.display='none';return}try{const info=await callBridge('classify_prompt',text);arClassEl.style.display='block';arClassEl.innerHTML=`<span style="color:var(--purple);font-weight:500">${info.complexity.toUpperCase()}</span> \u2014 ${escapeHtml(info.explanation)}${info.signals.length?'<br><span style="color:var(--text-muted)">'+info.signals.join(' · ')+'</span>':''}`}catch(e){arClassEl.style.display='none'}};
   let _arDebounce;composerInput.addEventListener('input',()=>{clearTimeout(_arDebounce);_arDebounce=setTimeout(updateArPreview,600)});
-  for(const p of providers){
+  // v2.2.1: Custom providers card — opens the unified Tools panel
+  // (Providers tab) where the user can add Nvidia NIM, OpenAI-compatible
+  // endpoints, and any other custom provider via a wizard.
+  const cpCard=document.createElement('div');cpCard.className='provider-config-card';cpCard.style.marginBottom='var(--s-16)';
+  cpCard.innerHTML=`<div class="provider-config-header"><div class="provider-config-name">Custom providers <span style="font-size:10px;color:var(--text-muted);font-weight:400">Nvidia NIM · OpenAI-compat · Ollama · LM Studio</span></div><div class="provider-config-actions"><button class="btn-primary" id="cpManageBtn">Manage →</button></div></div><div class="provider-config-body"><div class="full" style="font-size:12px;color:var(--text-secondary);line-height:1.6">Add your own providers without touching source code. Supports Nvidia NIM (free key at build.nvidia.com), any OpenAI-compatible endpoint, and local Ollama / LM Studio servers. Configurations are stored at <code style="font-family:var(--font-mono,monospace);font-size:11px;background:var(--bg-floating);padding:1px 5px;border-radius:3px">~/.clew/providers.yaml</code>.</div></div>`;
+  body.appendChild(cpCard);
+  document.getElementById('cpManageBtn').addEventListener('click',async function(){
+    // v2.2.3: open Tools tab → providers sub-tab inside this same Settings modal
+    // (previously this opened the separate Tools drawer)
+    const toolsTab = document.querySelector('.modal-tab[data-tab="tools"]');
+    if(toolsTab){ toolsTab.click(); }
+    // After the Tools grid renders, click the providers card
+    setTimeout(async function(){
+      const card = document.querySelector('.settings-tool-card[data-tool="providers"]');
+      if(card){ card.click(); }
+    }, 80);
+  });
+  // v2.2.3: With 30+ providers, group them by category so the user can
+  // scan the list quickly. Categories are derived from the structure of
+  // PROVIDER_META — the same provider id appears in exactly one category.
+  const PROVIDER_CATEGORIES = [
+    { label: 'Local (no API key needed)', ids: ['lmstudio','ollama','vllm','koboldcpp','llamafile'] },
+    { label: 'Major cloud providers',     ids: ['openai','anthropic','gemini','deepseek','zai','mistral','xai','cohere','perplexity','ai21'] },
+    { label: 'Fast inference (open models hosted)', ids: ['groq','cerebras','sambanova'] },
+    { label: 'Open-model hosting & aggregators', ids: ['openrouter','together','fireworks','novita','hyperbolic','lepton','siliconflow','friendli'] },
+    { label: 'ML platforms / model hubs', ids: ['huggingface','replicate'] },
+    { label: 'Enterprise cloud', ids: ['azure_openai','vertex_ai','bedrock'] },
+    { label: 'Nvidia NIM', ids: ['nvidia_nim'] },
+    { label: 'Generic / custom', ids: ['openai_compat'] },
+  ];
+  // Sort the providers list so they render in category order; any provider
+  // not in a category lands at the end under "Other".
+  const seen = new Set();
+  const ordered = [];
+  for(const cat of PROVIDER_CATEGORIES){
+    for(const id of cat.ids){
+      const p = providers.find(x => x.id === id);
+      if(p && !seen.has(id)){ ordered.push({p, cat}); seen.add(id); }
+    }
+  }
+  // Any providers not matched to a category go under "Other"
+  const others = providers.filter(p => !seen.has(p.id));
+  if(others.length){ ordered.push({cat:{label:'Other', ids:[]}, p:null, isOtherHeader:true}); for(const p of others) ordered.push({cat:{label:''}, p}); }
+  let lastCat = null;
+  for(const item of ordered){
+    if(item.isOtherHeader){
+      const lbl=document.createElement('div');lbl.className='provider-category-label';lbl.textContent='Other';body.appendChild(lbl);lastCat='Other';continue;
+    }
+    if(item.cat && item.cat.label && item.cat.label !== lastCat){
+      const lbl=document.createElement('div');lbl.className='provider-category-label';lbl.textContent=item.cat.label;body.appendChild(lbl);lastCat=item.cat.label;
+    }
+    const p = item.p;
+    if(!p) continue;
     const meta=PROVIDER_META[p.id]||{needsKey:true};
     const isActive=p.id===state.activeProvider;
     // v1.1.1: accordion — with 6-8 providers this used to be an endless
@@ -3086,7 +3304,109 @@ document.getElementById('modalSave').addEventListener('click',async()=>{
 });
 
 // Open project
-document.getElementById('openProjectBtn').addEventListener('click',()=>{if(!isBackendAvailable()){toast('Backend not connected','error');return}toast('Press ⌘+O to open a project folder')});
+document.getElementById('openProjectBtn').addEventListener('click', async () => {
+  if (!isBackendAvailable()) {
+    toast('Backend not connected', 'error');
+    return;
+  }
+
+  // Use the native file picker via backend (tkinter) which gives full paths
+  try {
+    const result = await callBridge('native_file_picker');
+    if (result && result.ok && result.path) {
+      await openProject(result.path);
+    } else if (result && result.error) {
+      toast('File picker error: ' + result.error, 'error');
+    } else if (result && result.cancelled) {
+      // User cancelled, do nothing
+    } else {
+      // Fallback to manual path entry modal
+      showOpenProjectModal();
+    }
+  } catch (e) {
+    console.warn('Native file picker failed:', e);
+    // Fallback to manual path entry modal
+    showOpenProjectModal();
+  }
+});
+
+function showOpenProjectModal() {
+  // Create a simple modal for path input
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:500px">
+      <div class="modal-header">
+        <h3>Open Project</h3>
+        <button class="modal-close" id="openProjectModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-secondary);margin-bottom:12px;font-size:13px">
+          Enter the full path to your project directory, or use the file picker below.
+        </p>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input type="text" id="openProjectPathInput" class="input" placeholder="/path/to/project" style="flex:1" />
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" id="openProjectCancel">Cancel</button>
+          <button class="btn btn-primary" id="openProjectConfirm">Open</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const input = modal.querySelector('#openProjectPathInput');
+  const close = () => modal.remove();
+
+  modal.querySelector('#openProjectModalClose').addEventListener('click', close);
+  modal.querySelector('#openProjectCancel').addEventListener('click', close);
+  modal.querySelector('#openProjectConfirm').addEventListener('click', async () => {
+    const path = input.value.trim();
+    if (!path) {
+      toast('Please enter a path', 'error');
+      return;
+    }
+    close();
+    await openProject(path);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      modal.querySelector('#openProjectConfirm').click();
+    } else if (e.key === 'Escape') {
+      close();
+    }
+  });
+
+  input.focus();
+}
+
+async function openProject(path) {
+  try {
+    const result = await callBridge('open_project', { path });
+    if (result.ok) {
+      toast('Project opened: ' + path, 'success');
+      // Refresh the project breadcrumb and file tree
+      state.projectRoot = path;
+      const breadcrumb = document.getElementById('projectBreadcrumb');
+      if (breadcrumb) {
+        breadcrumb.textContent = path;
+        breadcrumb.style.display = 'inline-block';
+      }
+      // Reload file tree if open
+      if (document.getElementById('codeViewer')?.classList.contains('open')) {
+        refreshFileTree();
+      }
+      // Reload chat list since it's project-specific
+      loadChats();
+    } else {
+      toast('Failed to open project: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    toast('Failed to open project: ' + e.message, 'error');
+  }
+}
 
 // Code Viewer
 const codeViewer=document.getElementById('codeViewer');const cvToggle=document.getElementById('cvToggle');const cvTree=document.getElementById('cvTree');const cvTabs=document.getElementById('cvTabs');const cvCode=document.getElementById('cvCode');const cvBreadcrumb=document.getElementById('cvBreadcrumb');const cvCount=document.getElementById('cvCount');
@@ -3526,7 +3846,11 @@ function showGuardianConfirm(info){
 }
 
 // Connect Guardian signal from bridge
-window.bridge.guardian_review_requested.connect(function(info){showGuardianConfirm(info)});
+// v2.2.2: guard for missing window.bridge (browser-only mode without
+//         bridge_shim.js — should never happen now, but defensive).
+if(window.bridge&&window.bridge.guardian_review_requested){
+  window.bridge.guardian_review_requested.connect(function(info){showGuardianConfirm(info)});
+}
 
 // ── Project breadcrumb ──────────────────────────────────────────
 function updateProjectBreadcrumb(){

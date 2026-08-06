@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Clew v2.0.0 — Spaces for Thinking</title>
+<title>Clew v2.2.0 — Web UI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
-<script src="qrc:///qtwebchannel/qwebchannel.js" onerror="window.__noQWebChannel=true"></script>
+<!-- v2.2.0: QWebChannel removed — the browser now talks to the backend
+     exclusively via the HTTP REST API + SSE on clew.web_server. -->
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="apple-design.css">
 </head>
@@ -48,25 +49,12 @@
         </div>
       </div>
       <div class="brand-name">Clew</div>
-      <div class="brand-version">v2.0.0</div>
+      <div class="brand-version">v2.2.1</div>
     </div>
-    <!-- Section Switcher -->
-    <div class="section-switcher" id="sectionSwitcher">
-      <button class="section-btn active" data-section="general" title="General">
-        <span class="section-icon"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 3.5A2 2 0 0 1 4.5 1.5h7A2 2 0 0 1 13.5 3.5v5A2 2 0 0 1 11.5 10.5H6.8L4 13v-2.5H3.9A2 2 0 0 1 2.5 8.5V3.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg></span>
-        <span class="section-label">General</span>
-      </button>
-      <button class="section-btn" data-section="heavycode" title="Heavy Code — Advanced autonomous coding agent with subagents + multi-agent parallelism — 10 free runs/day">
-        <span class="section-icon"><svg viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="7" height="7" rx="1.2" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 4.5V2M9.5 4.5V2M6.5 14v-2.5M9.5 14v-2.5M4.5 6.5H2M4.5 9.5H2M11.5 6.5H14M11.5 9.5H14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
-        <span class="section-label">Heavy Code</span>
-        <div class="section-right"><span class="section-badge hc-badge" id="hcQuotaBadge">10/day</span></div>
-      </button>
-      <button class="section-btn" data-section="office" title="Office Worker — Create and edit .docx / .xlsx / .pptx files directly from chat">
-        <span class="section-icon"><svg viewBox="0 0 16 16" fill="none"><path d="M4 2h5.5L13 5.5V13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9.3 2.1V5a1 1 0 0 0 1 1h2.8" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.3 8.4h5.4M5.3 10.5h5.4M5.3 12.6h3.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
-        <span class="section-label">Office Worker</span>
-        <div class="section-right"><span class="section-badge office-badge" id="officeBadge">new</span></div>
-      </button>
-    </div>
+    <!-- v2.2.1: Unified Tools sidebar — replaces the old 3-section switcher.
+         All capabilities (General / Heavy Code / Office / Hooks / Checkpoints /
+         GitHub / Capabilities / Handoffs / Audit / Spend / etc.) are now
+         reachable from one place. The chat itself stays section-agnostic. -->
     <div class="sidebar-section anim-stagger" id="generalSection">
       <button class="new-chat-btn" id="newChatBtn" title="New chat">
         <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2 4.6C2 3.2 3.2 2 4.6 2h5.8C11.8 2 13 3.2 13 4.6v4.3c0 1.4-1.2 2.6-2.6 2.6H7.6L4.6 14v-2.5h-.1C3.1 11.5 2 10.3 2 8.9V4.6Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/><path d="M7.5 4.7v3.4M5.8 6.4h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
@@ -83,6 +71,10 @@
         <span class="kbd">⌘K</span>
       </button>
     </div>
+
+    <!-- v2.2.3: Tools sidebar section removed — all backend features now
+         live under Settings → Tools tab. This drops ~17 sidebar buttons
+         and keeps the rail focused on chat navigation. -->
 
     <div class="sidebar-section" id="chatsSection">
       <div class="sidebar-label">Chats</div>
@@ -156,8 +148,8 @@
         <button class="icon-btn" id="ragBtn" title="Search project context (RAG)" style="display:none">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </button>
-        <!-- v2.0.0-tui: Launch TUI button -->
-        <button class="icon-btn" id="launchTuiBtn" title="Open in Terminal (TUI)">
+        <!-- v2.0.0-tui: Launch TUI button — closes GUI and opens TUI in terminal -->
+        <button class="icon-btn" id="launchTuiBtn" title="Open in Terminal (TUI) — closes this GUI">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M4 7l2 2 2-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 10h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
         </button>
       </div>
@@ -672,9 +664,10 @@
   <div class="modal-tabs" id="modalTabs">
     <div class="modal-tab active" data-tab="appearance">Appearance</div>
     <div class="modal-tab" data-tab="providers">Providers</div>
+    <div class="modal-tab" data-tab="tools">Tools</div>
+    <div class="modal-tab" data-tab="mcp">MCP</div>
     <div class="modal-tab" data-tab="agent">Agent</div>
     <div class="modal-tab" data-tab="project">Project</div>
-    <div class="modal-tab" data-tab="mcp">MCP</div>
     <div class="modal-tab" data-tab="snippets">Snippets</div>
     <div class="modal-tab" data-tab="about">About</div>
   </div>
@@ -843,7 +836,66 @@
   </div>
 </div>
 
+<!-- ════════════════════════════════════════════════════════════════
+     v2.2.1 — Unified Tools Panel
+     ════════════════════════════════════════════════════════════════
+     A single full-height drawer that hosts every backend feature
+     exposed through the new /api/* endpoints. The body is rendered
+     dynamically by tools_panels.js based on the data-tool attribute
+     of the clicked sidebar item.
+-->
+<div class="modal-backdrop" id="toolsBackdrop"></div>
+<div class="tools-panel" id="toolsPanel" role="dialog" aria-modal="true" aria-labelledby="toolsPanelTitle">
+  <header class="tools-panel-header">
+    <div class="tools-panel-title-wrap">
+      <div class="tools-panel-title" id="toolsPanelTitle">Tools</div>
+      <div class="tools-panel-subtitle" id="toolsPanelSubtitle">Manage Clew's backend capabilities</div>
+    </div>
+    <div class="tools-panel-actions">
+      <button class="icon-btn" id="toolsPanelRefresh" title="Refresh">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 0 1 10.5-4M14 8A6 6 0 0 1 3.5 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12 2v3h-3M4 14v-3h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="icon-btn" id="toolsPanelClose" title="Close (Esc)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+  <div class="tools-panel-body" id="toolsPanelBody">
+    <!-- Rendered by tools_panels.js -->
+  </div>
+  <footer class="tools-panel-footer" id="toolsPanelFooter" style="display:none"></footer>
+</div>
+
+<!-- v2.2.1 — Custom Provider Wizard (used by the Providers tab in Settings) -->
+<div class="modal-backdrop" id="providerWizardBackdrop"></div>
+<div class="modal" id="providerWizardModal" style="max-width:560px">
+  <div class="modal-header">
+    <div class="modal-title" id="providerWizardTitle">Add custom provider</div>
+    <button class="icon-btn" id="providerWizardClose" title="Close">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="modal-body" id="providerWizardBody" style="max-height:60vh;overflow:auto">
+    <!-- Rendered by tools_panels.js -->
+  </div>
+  <div class="modal-footer">
+    <button class="btn-secondary" id="providerWizardTest">Test connection</button>
+    <button class="btn-secondary" id="providerWizardCancel">Cancel</button>
+    <button class="btn-primary" id="providerWizardSave">Save provider</button>
+  </div>
+</div>
+
+<!-- v2.2.0: bridge_shim.js emulates the legacy QWebChannel ``window.bridge``
+     object on top of the HTTP REST API + SSE. Must load BEFORE app.js so
+     ``window.bridge`` is defined when app.js's top-level runs. -->
+<script src="bridge_shim.js"></script>
 <script src="app.js"></script>
+<!-- v2.2.1: tools_panels.js — implements the unified Tools sidebar
+     (Capabilities / Hooks / Checkpoints / GitHub / Handoffs / Audit /
+     Spend / Consensus / Second Opinion / Verify / Learnings / Notify /
+     Daemon / MCP Server / Persona). Loaded after app.js so it can
+     reuse ``callBridge`` / ``toast`` / ``isBackendAvailable``. -->
+<script src="tools_panels.js"></script>
 <!-- Heavy Code sidebar collapse toggle — presentation only, no backend/API calls,
      does not touch app.js or any element app.js depends on. -->
 <script>

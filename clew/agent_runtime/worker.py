@@ -1,23 +1,37 @@
 """
-AgentWorker — QThread wrapper around AgentRuntime.run_stream().
+AgentWorker — threading.Thread wrapper around AgentRuntime.run_stream().
 
-Used by the GUI to run an agent task off the Qt event loop
-without blocking the UI. Emits Qt signals for every AgentEvent
-so the main window can update the chat log, activity stream,
-and status bar in real time.
+v2.2.0: the legacy QThread-based AgentWorker has been rewritten on
+top of plain :mod:`threading`. The Qt GUI has been removed; the
+new HTTP API in :mod:`clew.api_server` runs the agent in a daemon
+thread and streams results to the browser via Server-Sent Events.
 
-Why a separate QThread instead of asyncio:
-- PySide6's signal/slot mechanism is thread-affine,
-- the legacy runtime uses threading.Event for cancellation
-  (not asyncio.CancelledError),
-- the v2 runtime (clew.agent.AgentRuntimeV2) is asyncio-based
-  and has its own worker (clew.agent.worker.AgentWorkerV2).
+This class is kept for backward compatibility — any code that still
+imports ``AgentWorker`` (e.g. legacy tests, scripts, the TUI bridge
+optional path) keeps working. New code should prefer driving the
+agent directly through ``AgentRuntime._run_agent_loop`` (as
+:mod:`clew.api_server` does) and threading it with
+``threading.Thread``.
+
+Public API (unchanged):
+
+    worker = AgentWorker(agent_runtime, task)
+    worker.step_update.connect(callback)   # callback(event_type, data_json)
+    worker.result_ready.connect(callback)  # callback(task_result)
+    worker.error.connect(callback)         # callback(error_str)
+    worker.start()                         # background thread
+    worker.cancel()                        # cooperative cancel
+
+The signal/slot API is replaced by simple callback registration —
+the ``connect()`` method just appends to a list of listeners.
 """
 
-import logging
-from typing import Any, Dict
+from __future__ import annotations
 
-from PySide6.QtCore import QThread, Signal
+import json
+import logging
+import threading
+from typing import Any, Callable, Dict, List, Optional
 
 from .types import AgentEvent, Task
 from .runtime import AgentRuntime
@@ -25,59 +39,95 @@ from .runtime import AgentRuntime
 logger = logging.getLogger(__name__)
 
 
-class AgentWorker(QThread):
-    """Runs agent tasks in a background QThread — does NOT block UI."""
+class _Signal:
+    """Tiny callback-list signal — drop-in for ``PySide6.QtCore.Signal``.
 
-    result_ready = Signal(object)   # TaskResult
-    step_update = Signal(str, str)  # event_type, data_json
-    progress = Signal(int, str)  # percent, message
-    error = Signal(str)
+    Only the ``connect`` + ``emit`` API is implemented. Thread-safe
+    via a lock so emit() from a worker thread doesn't race with
+    connect() from the main thread.
+    """
 
-    def __init__(self, agent_runtime: AgentRuntime, task: Task, parent=None, **gen_kwargs):
-        # v1.1.2-fix (bridge freeze): previously this called
-        # super().__init__() with NO parent, and `parent=self` passed by
-        # web_bridge.py's `AgentWorker(agent, task, parent=self)` was
-        # silently swallowed into **gen_kwargs instead of being forwarded
-        # to QThread. Every sibling worker (GenerationWorker, OneShotWorker,
-        # TitleWorker) does `super().__init__(parent)` — this one didn't.
-        #
-        # Effect: the QThread had no Qt parent, so it was kept alive only
-        # by the Python reference `self._agent_worker` on WebBridge. As
-        # soon as `_on_agent_done` set `self._agent_worker = None` (right
-        # after emitting agent_final/token_stats_updated), Python could
-        # garbage-collect the QThread wrapper while Qt hadn't finished
-        # tearing the native thread down yet — a classic "QThread:
-        # Destroyed while thread is still running" hazard that can stall
-        # the Qt event loop right at the moment the QWebChannel needs it
-        # to flush the just-emitted signals to the JS side. Backend logs
-        # showed everything completing normally (emit() returns
-        # immediately, before delivery), but the browser side never saw
-        # the update until the whole app was restarted (fresh event loop,
-        # and the reloaded chat renders via the unrelated load_chat path).
-        super().__init__(parent)
+    def __init__(self, *arg_types: Any) -> None:
+        self._listeners: List[Callable[..., None]] = []
+        self._lock = threading.Lock()
+
+    def connect(self, fn: Callable[..., None]) -> None:
+        with self._lock:
+            self._listeners.append(fn)
+
+    def disconnect(self, fn: Optional[Callable[..., None]] = None) -> None:
+        with self._lock:
+            if fn is None:
+                self._listeners.clear()
+            else:
+                try:
+                    self._listeners.remove(fn)
+                except ValueError:
+                    pass
+
+    def emit(self, *args: Any) -> None:
+        with self._lock:
+            listeners = list(self._listeners)
+        for fn in listeners:
+            try:
+                fn(*args)
+            except Exception:
+                logger.exception("[AgentWorker] signal listener raised")
+
+
+class AgentWorker(threading.Thread):
+    """Runs agent tasks in a background thread — does NOT block the caller.
+
+    Drop-in replacement for the legacy QThread-based AgentWorker.
+    Same constructor signature; ``start()``, ``cancel()`` and the
+    three signals (``result_ready``, ``step_update``, ``error``)
+    behave identically.
+    """
+
+    result_ready = _Signal(object)    # TaskResult
+    step_update = _Signal(str, str)   # event_type, data_json
+    progress = _Signal(int, str)      # percent, message
+    error = _Signal(str)
+
+    def __init__(
+        self,
+        agent_runtime: AgentRuntime,
+        task: Task,
+        parent: Any = None,        # ignored — kept for API compat
+        **gen_kwargs: Any,
+    ) -> None:
+        # NOTE: parent is intentionally swallowed. In the legacy QThread
+        # version it was forwarded to QThread for Qt ownership semantics.
+        # Plain threading.Thread has no parent concept.
+        super().__init__(daemon=True, name="clew-agent-worker")
         self.agent = agent_runtime
         self.task = task
         self.gen_kwargs = gen_kwargs
-        self._cancelled = False
+        self._cancelled = threading.Event()
 
-    def cancel(self):
-        self._cancelled = True
+    # ── Public API ───────────────────────────────────────────────
+    def cancel(self) -> None:
+        self._cancelled.set()
 
     def _is_cancelled(self) -> bool:
-        return self._cancelled
+        return self._cancelled.is_set()
 
-    def _on_event(self, event: AgentEvent, data: Dict[str, Any]):
-        if self._cancelled:
+    def _on_event(self, event: AgentEvent, data: Dict[str, Any]) -> None:
+        if self._cancelled.is_set():
             return
-        self.step_update.emit(event.value, json.dumps(data, default=str))
+        try:
+            self.step_update.emit(event.value, json.dumps(data, default=str))
+        except Exception:
+            logger.exception("[AgentWorker] step_update emit failed")
 
-    def run(self):
+    # ── Thread body ──────────────────────────────────────────────
+    def run(self) -> None:
         try:
             original_callback = self.agent.on_event
             self.agent.on_event = self._on_event
-            # v1.1.1: give the agent loop a way to see `cancel()` — without
-            # this, Stop only silenced UI events while the loop kept
-            # running writes/commands/deletes in the background.
+            # Give the agent loop a way to see `cancel()` — without this,
+            # Stop only silenced UI events while the loop kept running
+            # writes/commands/deletes in the background.
             self.agent.set_cancel_check(self._is_cancelled)
 
             result = self.agent._run_agent_loop(self.task, **self.gen_kwargs)
@@ -86,7 +136,16 @@ class AgentWorker(QThread):
             self.result_ready.emit(result)
 
         except Exception as e:
-            logger.error(f"AgentWorker failed: {e}")
-            self.error.emit(str(e))
+            logger.error("[AgentWorker] failed: %s", e, exc_info=True)
+            try:
+                self.error.emit(str(e))
+            except Exception:
+                logger.exception("[AgentWorker] error emit failed")
         finally:
-            self.agent.set_cancel_check(None)
+            try:
+                self.agent.set_cancel_check(None)
+            except Exception:
+                pass
+
+
+__all__ = ["AgentWorker", "_Signal"]

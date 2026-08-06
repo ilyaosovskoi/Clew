@@ -61,5 +61,5 @@ Clew-unique features preserved in v2.0:
 - Memory service (human-readable clew_memory.md with JSON metadata)
 """
 
-__version__ = "2.0.0"
+__version__ = "2.2.0"
 __all__ = ["__version__"]

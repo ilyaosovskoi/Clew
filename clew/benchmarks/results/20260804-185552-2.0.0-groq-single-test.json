@@ -1,0 +1,65 @@
+{
+  "started_at": "2026-08-04T18:55:47.615888+00:00",
+  "finished_at": "2026-08-04T18:55:52.230708+00:00",
+  "clew_version": "2.0.0",
+  "config": {
+    "provider": "groq",
+    "model": "llama-3.3-70b-versatile",
+    "max_iterations": 8,
+    "max_time_s": 300.0,
+    "dry_run": false,
+    "mock_provider": false,
+    "guardian_level": "off",
+    "autonomy": "never_ask",
+    "task_filter": [
+      "general_bug_fix_add"
+    ],
+    "section_filter": null,
+    "tag": "single-test"
+  },
+  "total_tasks": 1,
+  "passed": 0,
+  "failed": 1,
+  "errored": 0,
+  "skipped": 0,
+  "total_cost_usd": 0.003,
+  "total_tokens_in": 5051,
+  "total_tokens_out": 35,
+  "total_wall_clock_s": 4.614496041001985,
+  "results": [
+    {
+      "task_id": "general_bug_fix_add",
+      "section": "general",
+      "difficulty": "easy",
+      "passed": false,
+      "reason": "one or more criteria failed",
+      "wall_clock_s": 4.612,
+      "tool_call_count": 0,
+      "tokens_in": 5051,
+      "tokens_out": 35,
+      "cost_usd": 0.003,
+      "iterations": 1,
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "checked_criteria": [
+        {
+          "name": "calc.py exists",
+          "passed": true
+        },
+        {
+          "name": "add() still defined",
+          "passed": true
+        },
+        {
+          "name": "bug (return a - b) removed",
+          "passed": false
+        },
+        {
+          "name": "add(2, 3) == 5",
+          "passed": false
+        }
+      ],
+      "error": null
+    }
+  ]
+}

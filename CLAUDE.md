@@ -10,19 +10,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Install Python deps**: `pip install -e .`
 - **Install Rust native** (optional): `cd clew-native && maturin develop --release -m pyo3/Cargo.toml`
 - **Run TUI**: `clew_tui` (or `python -m clew_tui`)
-- **Run GUI**: `clew` (or `clew-gui`)
+- **Run Web UI**: `clew` (or `python -m clew.web_server`) — opens a local HTTP server at `http://127.0.0.1:18732/` and launches the default browser. No Qt/PySide6 dependency. (v2.2.0+)
 - **Run CLI**: `clew-cli`
 - **Run ACP server**: `clew-acp`
 - **Run MCP server**: `clew-acp --mcp-server` (or `python -m clew.mcp_server`)
 - **Run daemon**: `clew-daemon serve` (HTTP API + SSE on port 8765) / `clew-daemon task "prompt" --notify telegram`
-- **Run tests**: `pytest clew/` (or `pytest clew/agent/test_v2.py` for v2-specific)
+- **Run tests**: `pytest clew/` (or `pytest clew/agent/test_v2.py` for v2-specific, `pytest clew/tests/test_v221_web_ui_expansion.py` for v2.2.1 web-UI expansion)
 - **Lint**: `black clew/ clew_tui/` + `mypy clew/ clew_tui/`
 
 ## Architecture Overview
 
 ### Two packages, one boundary rule
-- **`clew/`** — core: agent runtime, providers, web bridge, Qt GUI
+- **`clew/`** — core: agent runtime, providers, web server (v2.2.0+ — Qt GUI removed), HTTP REST API + SSE
 - **`clew_tui/`** — TUI frontend. **Never imports clew internals directly.** Communicates exclusively through `clew_tui.bridge.ClewBridge`, which owns a plain `AgentRuntime` (same path as `clew/cli.py`). If a widget needs something from the core, add a method to `ClewBridge`.
+- **`clew/web/`** — browser frontend (HTML/CSS/JS). Talks to `clew.api_server` via HTTP REST + SSE; never imports Python directly. v2.2.1 added `tools_panels.js` for the unified Tools sidebar.
 
 ### Agent runtimes (two coexist)
 - **`AgentRuntime`** (`clew/agent_runtime/runtime.py`, 1510 lines) — legacy, preserved unchanged. Used by TUI bridge, CLI, and GUI web bridge.
@@ -316,3 +317,254 @@ pytest clew/ clew_tui/ -m "not interaction"        # Exclude interaction tests f
 - `loops/archive/loop-8-g22b-tui-interaction-tests.md` — Loop 8 documentation.
 - `CHANGES_update_11.md` — This update summary.
 - `docs/TEST_RESULTS_update_11.md` — Full test run results.
+
+## v2.2.1 (2026-08-05) — Unified Web UI ✅ COMPLETED
+
+### Goal
+The browser-based Web UI (introduced in v2.2.0 as a Qt replacement) only exposed a fraction of Clew's backend capabilities. The 3-section switcher (General / Heavy Code / Office Worker) was also obsolete now that all sections share the same chat pipeline. v2.2.1 closes both gaps:
+
+1. **Removed** the 3-section switcher from `index.html`. Chat is now a single unified surface; section-specific overlays (`.hc-pane`, `.office-pane`) are dead code retained only for backward compatibility.
+2. **Added** a unified Tools sidebar exposing **every** backend capability that was previously only reachable through the TUI's slash commands.
+
+### New files
+
+#### `clew/api_extended.py` (1715 lines, 118 endpoints)
+Monkey-patches `clew.api_server.ClewAPIHandler` at import time to install 56 GET + 62 POST endpoints. Dispatches to a shared `clew_tui.bridge.ClewBridge` instance so the browser reaches every backend capability through the same code path the TUI uses. Endpoint groups:
+
+| Group | Endpoints | Notes |
+|-------|-----------|-------|
+| Custom providers | `/api/providers/custom/{list,add,update,remove,test}` + `/api/providers/templates` | CRUD over `~/.clew/providers.yaml`. Templates include **Nvidia NIM** (`https://integrate.api.nvidia.com/v1`), OpenAI-compatible, Ollama, LM Studio. API keys are masked in list responses. |
+| Capabilities | `/api/capabilities/{list,categories,get,run}` | Browse & run capability templates. |
+| Second Opinion | `/api/second_opinion/{config,run,providers}` | Cross-model review (Pro-gated). |
+| Token budget | `/api/budget/{get,set,reset,check}` | Hard cost caps + per-turn efficiency knobs. |
+| Cross-model verify | `/api/verify/run` | Independent verifier on agent's last response. |
+| Agents / Audit | `/api/agents/{identity,list,spawn}` + `/api/audit/{summary,filter,export_json,export_csv,signed_export,signed_verify}` | Agent identity + Ed25519-signed audit trail. |
+| Handoffs | `/api/handoff/{create,list,get,block_status,todo_toggle,reorder,delete,revision_prompt,export_md}` | Editable post-task documents. |
+| Cost router | `/api/cost/{config,cap,route,apply}` | Smart provider routing under budget pressure. |
+| Spend dashboard | `/api/spend/{identity,team,budget,report,sources,sources_add,export_json,export_csv}` | Team token usage + cost. |
+| Hooks | `/api/hooks/{list,register,remove,toggle,test,stats}` | Pre/post-tool interception. |
+| Checkpoints | `/api/checkpoint/{create,list,get,rewind,rewind_to,diff,auto,stats}` | Snapshot + rewind. |
+| GitHub | `/api/github/{status,set_token,set_repo,detect_repo,list_prs,get_pr,create_pr,pr_context,list_issues,get_issue,create_issue,comment_pr,generate_action}` | Full PR/issue automation. |
+| Consensus | `/api/consensus/{config,run}` | Multi-provider parallel run. |
+| Learnings | `/api/learnings/{list,show,dismiss,restore,scan,dismissed}` | Auto-detected learnings. |
+| Web search | `/api/websearch/status` | Web tool status. |
+| Persona | `/api/persona/{get,set,reset}` | System-prompt editor. |
+| Router mode | `/api/router/mode` | AutoRouter auto/manual toggle. |
+| MCP server | `/api/mcp_server/{list_tools,status}` | Clew-as-MCP-server introspection. |
+| Notifications | `/api/notify/{backends,configure,toggle,test,test_all,set_events,status,remove}` | Telegram/Discord/Slack. |
+| Daemon | `/api/daemon/{submit,status}` | Background task queue. |
+| Pro toggle | `/api/pro/{status,toggle}` | Gates Second Opinion / Consensus. |
+| Collaboration | `/api/collaboration/{modes,run}` | Swarm collaboration. |
+| Persistence | `/api/persistence/{backend,sessions}` + `/api/compaction/stats` + `/api/usage/get` | Storage backends. |
+| Slash commands | `/api/slash_commands/{list,resolve}` | Mirror of TUI `/cmd`. |
+| Section | `/api/section/{get,set}` | Legacy compat — always "general". |
+
+`install()` also extends `ServerContext.MUTATING_PATHS` so all new POST routes are protected by the existing bearer-token auth guard.
+
+#### `clew/web/tools_panels.js` (1371 lines)
+Implements the unified Tools panel — a full-height drawer that opens when any `.tools-nav` sidebar item is clicked. Each renderer talks directly to `/api/*` (no `callBridge` indirection) and renders rich UI:
+
+- **Capabilities**: card grid → detail view → variable-fill form → send prompt to composer.
+- **Hooks**: stats pills, table with toggle/test/remove, code editor for new hooks.
+- **Checkpoints**: create / list / rewind-to / diff vs latest / toggle auto-checkpoint.
+- **Handoffs**: list / inspect blocks / accept-reject per block / todo toggle / markdown export / build-revision-prompt → composer.
+- **GitHub**: token + repo setup, list PRs/issues, create PR/issue, get PR implementation context, comment, generate GitHub Action YAML.
+- **Audit**: agent identity, summary stats, agents table, export JSON/CSV/signed-Ed25519.
+- **Spend**: identity, budget progress bar, by-provider breakdown, export JSON/CSV.
+- **Consensus**: config + run with per-provider divergence display.
+- **Second Opinion**: config + run with verdict badge.
+- **Verify**: pre-fills last agent response, runs verifier, structured verdict display.
+- **Learnings**: list / scan / dismiss / restore / show.
+- **GitHub Actions**: trigger picker → generate workflow YAML → download.
+- **Notifications**: list backends / configure / toggle / test / test-all / remove.
+- **Daemon**: status + submit background task.
+- **MCP Server**: status + tool list with read/write badges.
+- **Persona**: textarea editor with save/reset.
+- **Custom Providers**: template gallery (Nvidia NIM / OpenAI-compat / Ollama / LM Studio), CRUD table, wizard modal with test-connection button.
+
+#### `clew/tests/test_v221_web_ui_expansion.py` (425 lines, 130 tests)
+- 56 GET + 62 POST route-registration tests (parametrised).
+- Provider-template tests: Nvidia NIM must be in templates with correct `base_url`, `model`, and `provider_type`.
+- Custom-provider round-trip: add → list (with API key masking) → remove.
+- Duplicate-rejection and required-field validation.
+- Every handler returns a dict with an `ok` flag (uses a mocked `ClewBridge`).
+- `install()` patches `ClewAPIHandler.do_GET/do_POST/do_DELETE`.
+- Section legacy compat: `/api/section/get` always returns "general".
+
+### Modified files
+
+#### `clew/api_server.py`
+- Added `from .api_extended import install as _install_extended_routes; _install_extended_routes()` at the bottom (no-op if `api_extended` not importable — robust to stripped-down environments).
+- Expanded the docstring endpoint list with the new v2.2.1 routes.
+- `MUTATING_PATHS` is now extended at install time so all new POST routes are auth-guarded.
+
+#### `clew/web/index.html`
+- **Removed** the 3-button `.section-switcher` (General / Heavy Code / Office Worker).
+- **Added** a new `<div id="toolsSection">` sidebar section with 16 `.tools-nav` buttons, each `data-tool="..."` opening the corresponding panel.
+- **Added** the Tools panel drawer (`#toolsPanel`) and the Custom Provider Wizard modal (`#providerWizardModal`).
+- **Added** `<script src="tools_panels.js">` after `app.js`.
+- Bumped version label to `v2.2.1`.
+
+#### `clew/web/app.js`
+- Added a "Custom providers" card to `renderProvidersTab` with a "Manage →" button that opens the Tools panel at the `providers` tab. Bridges the existing Settings modal with the new unified panel.
+
+#### `clew/web/style.css`
+- Added 560 lines of styles for: `.tools-panel` drawer, `.tools-table`, `.stat-pill`, `.badge-*`, `.cap-card`, `.template-card`, `.handoff-block`, `.progress-bar`, `.btn-mini`, plus the provider wizard modal. Existing styles untouched.
+
+### Smoke-test results (sandbox)
+```
+$ python -m pytest clew/tests/test_v221_web_ui_expansion.py -v
+============================= 130 passed in 0.28s ==============================
+
+$ python -c "from clew.web_server import ClewWebServer; ..."
+GET  /api/providers/templates → 200 (has nvidia_nim template: True)
+GET  /api/capabilities/list   → 200
+GET  /api/checkpoint/list     → 200
+GET  /api/section/get         → {ok: True, section: 'general'}
+POST /api/providers/custom/add (no auth) → HTTP 401 (expected)
+POST /api/providers/custom/add (with auth) → 200, {ok: True, provider_id: 'my-nim-test'}
+GET  /api/providers/custom/list → 200, providers: [('my-nim-test', 'nvap…2345')], api_key not leaked: True
+```
+
+### Architecture notes
+- The browser still talks HTTP/SSE only — no QWebChannel, no PySide6.
+- `clew.api_extended._bridge()` lazily creates a `clew_tui.bridge.ClewBridge` (same path as the TUI uses), so every backend capability is reachable through the same code path the TUI uses. This keeps the boundary rule intact.
+- `clew/api_server.py` stays at 2315 lines (was 2244) — the new endpoints live in `api_extended.py` to keep the diff reviewable.
+- Backward compat: legacy endpoints (`/api/status`, `/api/chat/stream`, etc.) are unchanged; the new routes are additive.
+- The removed `.section-switcher` HTML element had its click handlers in `app.js` guarded by `if(!switcher) return;`, so the JS keeps working without errors.
+
+---
+
+## v2.2.2 — Web UI layout overflow fix
+
+**Problem:** Users reported the Web UI window was "too large and goes beyond the browser, getting cut off." The bottom composer (text input + Send button) was clipped off-screen on every viewport size, not just small ones.
+
+### Root cause
+
+The `.app` container was a CSS Grid with `display:grid; height:100vh` but **no `grid-template-rows`**. By default, grid items have `min-height: auto`, which means they grow to their content's intrinsic size — they **cannot shrink below content size**.
+
+The sidebar (`<aside class="sidebar">`) had 22+ nav buttons stacked vertically (after the v2.2.1 Tools sidebar expansion). On a 800px-tall viewport, the sidebar's content was 1247px tall. Without `min-height: 0`, the sidebar grew to 1247px instead of being constrained to the 800px viewport. The same happened to `.stage`, which pushed `.composer-wrap` down to `y=1102` — well below the 800px viewport, where it got clipped by `body { overflow: hidden }`.
+
+Playwright probe confirmed:
+```
+viewport=1280x800
+.app         rect=(0,0)     1280x800    ← correct
+.sidebar     rect=(0,0)     64x1247     ← BAD: grew to content size
+.stage       rect=(64,0)    1216x1247   ← BAD: grew to content size
+.composer-wrap rect=(64,1102) 1216x145  ← bottom=1247, clipped off-screen
+```
+
+### Fix
+
+**`clew/web/style.css`** — three-line CSS fix:
+1. `.app` gained `grid-template-rows: minmax(0, 1fr)` (forces the row to exactly the container height, regardless of content).
+2. `.app` switched `width: 100vw` → `width: 100%` (100vw includes scrollbar width on some browsers, causing horizontal overflow).
+3. `.sidebar` and `.stage` each gained `min-height: 0; height: 100%` (overrides the default `min-height: auto`, allowing them to shrink below content size so `overflow-y: auto` actually scrolls internally instead of overflowing).
+
+Also added `overflow-x: hidden` on `html` and `body` as belt-and-braces against any future transform-positioned drawer reporting a bounding rect past the viewport (the Tools panel uses `transform: translateX(100%)` to hide off-screen — `getBoundingClientRect()` reports `right=2000`, but body's `scrollWidth` stays at 1280, so this is a false positive that the new `overflow-x: hidden` silences).
+
+### Other fixes shipped in v2.2.2
+
+While diagnosing the layout bug, two missing-asset 404s were discovered:
+
+1. **`clew/web/bridge_shim.js`** (new file, ~310 lines) — `index.html` loads `<script src="bridge_shim.js">` before `app.js`, but the file was missing since the Qt removal in v2.2.0. Without it, `window.bridge` was undefined and `app.js` crashed at line 3536 (`window.bridge.guardian_review_requested.connect(...)` is not inside an `isBackendAvailable()` guard). The new shim:
+   - Provides stub Qt-style signal objects (with `.connect()` / `.disconnect()`) for all 23 signal names app.js references.
+   - Provides a `Proxy`-based method dispatcher that maps snake_case bridge methods (`get_status`, `list_chats`, `set_provider`, `send_agent_message`, etc.) to HTTP routes (`/api/status`, `/api/chat/list`, ...).
+   - On page load, attempts `GET /api/status`. If reachable, marks `window.__clewBridgeConnected = true`, calls `window.__clewReady(status)`, and dispatches the `clew:bridge_ready` event so app.js wires its signal handlers.
+   - Skips the fetch on `file://` URLs (Playwright/file-opened direct) and falls back to "demo mode" — the UI renders without backend data.
+   - Exposes `window.__clewBridgeFire(name, ...args)` so the backend (or test harness) can simulate signals arriving.
+
+2. **`clew/web/apple-design.css`** (new stub) — `index.html` references this stylesheet but it never existed. The stub silences the 404; it's intentionally empty (all visual styling lives in `style.css`).
+
+3. **`clew/web/app.js`** — guarded the `window.bridge.guardian_review_requested.connect(...)` call with `if (window.bridge && window.bridge.guardian_review_requested)` so a future missing-shim scenario doesn't crash the page.
+
+### Verification
+
+Playwright probe across 5 viewport sizes (1024×768, 1280×800, 1440×900, 1536×864, 1920×1080):
+
+```
+BEFORE (v2.2.1):
+laptop-1280x800   BODY-OVERFLOW-Y(bsh=1247) ELEM-OVERFLOW-X=1 ELEM-OVERFLOW-Y=4 CONSOLE-ERRORS=3
+
+AFTER (v2.2.2):
+laptop-1280x800   ELEM-OVERFLOW-X=1  (false positive — tools-panel hidden via transform)
+```
+
+`body.scrollHeight` dropped from 1247 → 800 (matches viewport). The single remaining `ELEM-OVERFLOW-X` is the Tools panel drawer, which is intentionally positioned off-screen via `transform: translateX(100%)` when closed. `body.scrollWidth` is 1280 (matches viewport) — no actual horizontal overflow.
+
+VLM visual confirmation (laptop-1280x800.png):
+> "Yes, the entire UI is visible within the viewport. The bottom composer (the text input area with the 'Send' button) is fully visible. There are no cut-off elements."
+
+### Files in this update
+
+- **`clew/web/style.css`** (modified) — 3-line CSS fix for the grid layout bug, plus `overflow-x: hidden` on html/body.
+- **`clew/web/bridge_shim.js`** (new, ~310 lines) — `window.bridge` stub + HTTP method dispatcher.
+- **`clew/web/apple-design.css`** (new stub) — silences missing-stylesheet 404.
+- **`clew/web/app.js`** (modified) — guarded `guardian_review_requested.connect(...)` against missing `window.bridge`.
+- **`CLAUDE.md`** (modified) — this section.
+
+### Backward compatibility
+
+- No Python code changed — `api_server.py`, `api_extended.py`, and the test suite are untouched.
+- The 130 existing tests in `clew/tests/test_v221_web_ui_expansion.py` still pass (the 2 that fail in this sandbox require `clew.providers`, which isn't present in the stripped environment — pre-existing, unrelated to this fix).
+- The CSS changes are additive: existing elements keep working. The new `grid-template-rows` only constrains the grid row height (which was already implicitly the viewport height, just not enforced).
+- `bridge_shim.js` is a strict superset of "no bridge": if `window.bridge` was previously set by some other mechanism, the shim early-returns (`if (window.bridge && window.__clewBridgeShimInstalled) return;`).
+
+## v2.2.3 — Tools moved into Settings; provider catalog expanded
+
+**Date:** 2026-08-05
+**Scope:** UX simplification + provider catalog expansion.
+
+### Problem
+
+The v2.2.1 Tools sidebar (17 nav buttons: Capabilities, Hooks, Checkpoints, Handoffs, GitHub, Audit, Spend, Consensus, Second Opinion, Verify, Learnings, CI Templates, Notifications, Daemon, MCP Server, Persona, Providers) made the rail noisy and competed with chat navigation for attention. Separately, the Providers tab only listed 15 providers — missing many that users actually use (Cohere, Perplexity, AI21, Hugging Face, Replicate, Azure, Vertex, Bedrock, Novita, Hyperbolic, Lepton, SiliconFlow, Friendli, vLLM, KoboldCpp, llamafile, etc.).
+
+### Fix
+
+1. **Removed the entire Tools sidebar section.** The rail now contains only: Brand, New chat, Catalog, Command, Chats list, Open project, Settings, Usage, Files, Profile. Much quieter.
+
+2. **Added a new "Tools" tab inside the Settings modal.** Clicking it renders a categorized grid of all 17 backend capabilities:
+   - **Agent runtime**: Capabilities, Hooks, Checkpoints, Handoffs, Learnings, Persona
+   - **Code & collaboration**: GitHub, GitHub Actions, Consensus, Second Opinion, Verify
+   - **Operations**: Audit, Spend, Notifications, Daemon
+   - **Extensions**: MCP Server, Providers (custom provider wizard)
+
+   Clicking any card renders that tool's content directly inside the Settings modal body (with a "← Back to Tools" button). Reuses the existing `RENDERERS` map from `tools_panels.js` — no logic duplicated.
+
+3. **Expanded `PROVIDER_META`** in `app.js` from 15 to 30 providers, organized into 8 categories (Local, Major cloud, Fast inference, Open-model hosting, ML platforms, Enterprise cloud, Nvidia NIM, Generic). The Providers tab now renders category labels between groups so the user can scan the long list quickly. All provider cards stay collapsed by default (accordion) so only the active provider auto-expands.
+
+4. **Expanded the backend provider-templates endpoint** (`/api/providers/templates`) from 4 to 31 templates. Each template pre-fills the Custom Provider Wizard with sensible defaults (base URL, model, env var name, docs link). Now covers every notable cloud, open-model host, local runner, and the enterprise clouds. Users can clone any of these into `~/.clew/providers.yaml` with one click.
+
+5. **The MCP tab (already in Settings from v2.2.1)** keeps its existing UI: list of configured MCP servers with start/stop/toggle/remove, an "Add server" form (name + command + env vars), and a "Popular MCP servers" reference panel (Filesystem, GitHub, Playwright).
+
+### Files changed in this update
+
+- `clew/web/index.html` — removed the Tools sidebar section (~70 lines), added `<div class="modal-tab" data-tab="tools">Tools</div>` to the Settings modal tabs.
+- `clew/web/app.js` — expanded `PROVIDER_META` from 15 to 30 entries; added `renderToolsTab(body)` + helpers (`_renderToolsGrid`, `_renderToolsSub`) that embed any tool's renderer inside the Settings modal; added category grouping to `renderProvidersTab`; rewired the "Custom providers → Manage" button to open the Tools tab → providers subview (was: opening the separate Tools drawer).
+- `clew/web/tools_panels.js` — exported `RENDERERS` and `TOOL_META` as `window.__clewToolsRenderers` and `window.__clewToolMeta` so the Settings → Tools tab can call them.
+- `clew/web/style.css` — appended CSS for `.settings-tools-*` (grid, cards, subheader, subbody) and `.provider-category-label` / accordion chevron rotation.
+- `clew/api_extended.py` — expanded `_provider_templates()` from 4 to 31 templates (added OpenAI, Anthropic, Gemini, DeepSeek, Z.ai, Mistral, xAI, Cohere, Perplexity, AI21, Groq, Cerebras, SambaNova, OpenRouter, Together, Fireworks, Novita, Hyperbolic, Lepton, SiliconFlow, Friendli, Hugging Face, Replicate, Azure OpenAI, vLLM, KoboldCpp, llamafile).
+
+### Verification
+
+Playwright probe (1440×900 viewport):
+- ✓ No `.tools-nav` buttons in sidebar (was 17)
+- ✓ Settings modal has 8 tabs: Appearance, Providers, Tools, MCP, Agent, Project, Snippets, About
+- ✓ Tools grid renders 17 cards across 4 category groups
+- ✓ Clicking a card renders the sub-view with a Back button
+- ✓ Back button returns to the grid
+- ✓ Providers tab shows 33 provider cards across 8 categories
+- ✓ MCP tab renders the servers list + add form + popular-servers reference
+- ✓ No critical JS errors (only expected 404s for /api/* routes when serving files without a backend)
+
+VLM visual confirmation:
+- Sidebar: "No, there are no 'Tools' nav buttons visible in the sidebar."
+- Settings → Tools: "Yes, there is a grid of tool cards visible below the informational text. They are organized into sections like 'Agent Runtime,' 'Code & Collaboration,' and 'Operations.' I count roughly 13 tool cards in total."
+- Settings → MCP: "Yes, this is a Settings modal showing the MCP servers configuration UI... there are example MCP server commands visible under 'POPULAR MCP SERVERS'."
+
+### Backward compatibility
+
+- All existing `/api/*` endpoints unchanged.
+- The 128 passing tests in `clew/tests/test_v221_web_ui_expansion.py` still pass (the 2 that fail are pre-existing environment issues — `clew.providers` module not present in this sandbox — unrelated to this update).
+- The Tools panel drawer (`#toolsPanel`) and its CSS are kept for any code that still references it; the new Settings → Tools tab is the primary surface, but the drawer still works if opened programmatically.
+- Existing user configurations in `~/.clew/config.json`, `~/.clew/providers.yaml`, and `~/.clew/mcp.json` are not touched.

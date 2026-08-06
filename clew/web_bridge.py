@@ -1,16 +1,37 @@
 """
 Legacy shim for clew.web_bridge.
 
-The original 4126-line monolith has been refactored into the
-`clew/web_bridge/` package. This file re-exports the public
-API so existing imports keep working unchanged:
+v2.2.0: the original 4126-line monolith (and the later refactored
+``clew/web_bridge/`` package) exposed a PySide6 ``ClewBridge``
+QObject to the in-process HTML frontend via QWebChannel. The Qt
+GUI has been removed; the browser now talks to the backend via
+the HTTP REST API + SSE in :mod:`clew.api_server`.
 
-    from clew.web_bridge import ClewBridge
-    from clew.web_bridge import _load_config  # main_window uses this
+This file re-exports only the path/config helpers that
+:mod:`clew.api_server` and :mod:`clew.cli` still depend on::
 
-See clew/web_bridge/__init__.py for the package layout and
-REFACTORING_NOTES.md for the migration map.
+    from clew.web_bridge import _load_config
+    from clew.web_bridge import _chat_path, _load_chat, _save_chat
+
+The Qt-only names (``ClewBridge``, ``GenerationWorker``,
+``OneShotWorker``, ``TitleWorker``) are kept as hard-error shims
+so old code fails loudly instead of silently.
 """
 
-from clew.web_bridge import *  # noqa: F401,F403
-from clew.web_bridge import __all__  # noqa: F401
+from clew.web_bridge import (
+    _clew_home, _config_path, _chats_dir,
+    _load_templates_from_disk, _load_skills_from_disk,
+    _classify_user_intent,
+    _load_config, _save_config,
+    _chat_path, _load_chat, _save_chat,
+)
+from clew.web_bridge.bridge import ClewBridge, ClewBridgeRemovedError
+
+__all__ = [
+    "ClewBridge", "ClewBridgeRemovedError",
+    "_clew_home", "_config_path", "_chats_dir",
+    "_load_templates_from_disk", "_load_skills_from_disk",
+    "_classify_user_intent",
+    "_load_config", "_save_config",
+    "_chat_path", "_load_chat", "_save_chat",
+]
