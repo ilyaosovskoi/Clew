@@ -1,0 +1,96 @@
+# Clew Builder — Sample Task List
+#
+# Lines starting with '#' are comments and skipped.
+# Empty lines are skipped.
+# Every other non-empty line is a task title.
+#
+# For richer tasks (with success criteria), use the "## Title" format:
+#
+#   ## Title Goes Here
+#   - success criterion 1
+#   - success criterion 2
+#
+# Tasks are processed in order. Re-running `clew builder --tasks <this file>`
+# skips tasks already DONE (state in <workspace>/.clew/builder_state.json)
+# unless you pass --fresh-state.
+#
+# This sample file mirrors the task list the user pasted in the original
+# request — it's the "interesting test" of the autonomous loop. Most of
+# these are non-trivial; the loop will probably succeed on some, fail
+# on others, and that's exactly the point.
+
+## Virtual 1M+ Context Module
+- context_window plumbed through to AgentRuntime when provider supports it
+- import clew succeeds
+- python -m clew.cli status exits 0
+
+## Inline Edit (Cmd+K Analog)
+- new function edit_selection() exists in clew/agent_runtime/tool_engine/_engine.py
+- round-trips through diff review
+
+## Smart Real-time Search
+- web_search_backend has a caching layer
+- search results are deduplicated by URL
+
+## Guardian Fail-Closed Mode
+- guardian.py has a FAIL_CLOSED config flag
+- when enabled, any LLM review error returns REJECT instead of APPROVE
+
+## Plugin Manifest & Signing
+- plugins/__init__.py defines a PluginManifest dataclass
+- signature verification helper exists in audit_signing.py
+
+## Temp Files Cleanup on SIGKILL
+- tool_engine registers an atexit handler for /tmp/clew_* files
+- stale temp files older than 1 hour are removed on next run
+
+## Run Code PATH Isolation
+- _helpers.py restricts PATH to a whitelist when sandbox is active
+- python -c "import clew" succeeds
+
+## Search Project Permission Handling
+- _search_project raises a clear PermissionError instead of silently falling back to workspace
+
+## Command Path Validation After -exec
+- _validate_command_paths checks paths appearing after -exec and --
+
+## Circuit Breaker HALF_OPEN Fix
+- circuit_breaker.py allows only ONE probe request in HALF_OPEN state
+- subsequent probes block until the probe completes
+
+## Web Server HEAD Method Fix
+- web_server.py do_HEAD for API path returns headers only (no body)
+
+## MCP Manager Thread Safety
+- mcp_manager.py guards _clients and _crash_announced with a Lock
+
+## Tab Autocomplete (FIM)
+- new function complete_fim() exists in tool_engine/_engine.py
+- returns a single-line completion suggestion
+
+## AST-Aware Code Chunking
+- tool_engine/_engine.py has an ast-based chunker function
+- chunks respect Python statement boundaries
+
+## Context Compaction v2
+- compaction_v2.py preserves tool_call/tool_result pairs during intra-turn compaction
+
+## Search Result Caching
+- web_search_backend caches results keyed by query string
+- TTL is configurable
+
+## Pro Tier Billing Integration
+- spend_dashboard.py has a ProTier class
+- tracks per-user spend
+
+## Landing Page & Waitlist
+- web/index.html has a waitlist signup form
+- POST /api/waitlist endpoint exists in web_server.py
+
+## Plugin Marketplace Spec
+- plugins/__init__.py has a PluginMarketplace class skeleton
+- lists available plugins from a registry URL
+
+## Audit Dashboard UI
+- web/index.html has an audit trail viewer panel
+- fetches /api/audit endpoint
