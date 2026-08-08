@@ -44,10 +44,10 @@ logger = logging.getLogger(__name__)
 # Default role → NIM model mapping. The user can override any of these
 # via BuilderConfig.nim_models.
 DEFAULT_MODEL_FOR_ROLE: Dict[str, str] = {
-    "plan":       "meta/llama-3.1-70b-instruct",
-    "implement":  "meta/llama-3.1-70b-instruct",
-    "review":     "meta/llama-3.1-70b-instruct",
-    "quick":      "meta/llama-3.1-8b-instruct",
+    "plan":       "deepseek-ai/deepseek-v4-flash-0731",
+    "implement":  "deepseek-ai/deepseek-v4-flash-0731",
+    "review":     "deepseek-ai/deepseek-v4-flash-0731",
+    "quick":      "deepseek-ai/deepseek-v4-flash-0731",
 }
 
 

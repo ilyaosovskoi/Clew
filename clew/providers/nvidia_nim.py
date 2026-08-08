@@ -21,7 +21,7 @@ class NvidiaNIMProvider(OpenAICompatProvider):
 
     provider_id: str = "nvidia_nim"
     label: str = "Nvidia NIM"
-    default_model: str = "meta/llama-3.1-8b-instruct"
+    default_model: str = "deepseek-ai/deepseek-v4-flash-0731"
     api_base: str = "https://integrate.api.nvidia.com/v1"
     env_var: str = "NVIDIA_API_KEY"
     capabilities: frozenset = frozenset({
@@ -31,7 +31,7 @@ class NvidiaNIMProvider(OpenAICompatProvider):
         ProviderCapability.SYSTEM_PROMPT,
         ProviderCapability.SKILLS,
     })
-    context_window: int = 131_072  # Llama 3.1 8B context window
+    context_window: int = 1_048_576  # deepseek-v4-flash-0731 context window
 
     # Model-specific context windows (substring match)
     _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
@@ -50,4 +50,5 @@ class NvidiaNIMProvider(OpenAICompatProvider):
         "phi-3-mini": 4_096,
         "phi-3-medium": 4_096,
         "phi-3.5-mini": 4_096,
+        "deepseek-v4-flash": 1_048_576,
     }
